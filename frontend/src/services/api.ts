@@ -28,6 +28,33 @@ export class ApiError extends Error {
   }
 }
 
+let cachedCsrfToken: string | null = null;
+
+/**
+ * Fetch and cache CSRF token from backend endpoint for cross-origin SPA contexts.
+ */
+export async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+    const csrfEndpoint = `${apiBaseUrl}/api/v1/auth/csrf/`;
+    const res = await fetch(csrfEndpoint, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.csrfToken) {
+        cachedCsrfToken = data.csrfToken;
+        return data.csrfToken;
+      }
+    }
+  } catch {
+    // Graceful degradation
+  }
+  return null;
+}
+
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { params, headers = {}, ...customConfig } = options;
 
@@ -44,7 +71,10 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
 
   // Retrieve CSRF token for unsafe HTTP verbs
   const isUnsafeMethod = customConfig.method && !['GET', 'HEAD', 'OPTIONS'].includes(customConfig.method.toUpperCase());
-  let csrfToken = getCookie('csrftoken');
+  let csrfToken = getCookie('csrftoken') || cachedCsrfToken;
+  if (isUnsafeMethod && !csrfToken) {
+    csrfToken = await fetchCsrfToken();
+  }
 
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
@@ -76,6 +106,9 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     const data = isJson ? await response.json() : await response.text();
 
     if (!response.ok) {
+      if (response.status === 403) {
+        cachedCsrfToken = null;
+      }
       let errorMessage = 'API request failed';
 
       if (typeof data === 'string') {

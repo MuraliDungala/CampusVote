@@ -136,17 +136,30 @@ DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').strip().lower()
 DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
 
 if DATABASE_URL:
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, parse_qs, unquote
     _db_url = urlparse(DATABASE_URL)
+    _db_options = {}
+    if _db_url.query:
+        _query_params = parse_qs(_db_url.query)
+        for _k, _v in _query_params.items():
+            if _v:
+                _db_options[_k] = _v[0]
+
+    _db_host = _db_url.hostname or '127.0.0.1'
+    if '.' in _db_host and _db_host not in ('127.0.0.1', 'localhost'):
+        if 'sslmode' not in _db_options:
+            _db_options['sslmode'] = 'require'
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': _db_url.path.lstrip('/'),
-            'USER': _db_url.username or '',
-            'PASSWORD': _db_url.password or '',
-            'HOST': _db_url.hostname or '127.0.0.1',
+            'NAME': unquote(_db_url.path.lstrip('/')) if _db_url.path else '',
+            'USER': unquote(_db_url.username) if _db_url.username else '',
+            'PASSWORD': unquote(_db_url.password) if _db_url.password else '',
+            'HOST': _db_host,
             'PORT': str(_db_url.port or '5432'),
             'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+            'OPTIONS': _db_options,
         }
     }
 elif DB_ENGINE == 'postgresql':

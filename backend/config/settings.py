@@ -146,6 +146,23 @@ if DATABASE_URL:
                 _db_options[_k] = _v[0]
 
     _db_host = _db_url.hostname or '127.0.0.1'
+
+    # Auto-resolve cross-region Render internal hostnames if private DNS lookup fails
+    if _db_host.startswith('dpg-') and '.' not in _db_host:
+        import socket
+        try:
+            socket.gethostbyname(_db_host)
+        except (socket.gaierror, OSError):
+            # Internal private DNS could not resolve (cross-region). Probe public Render regional domains.
+            for _region in ['singapore', 'oregon', 'frankfurt', 'ohio', 'virginia']:
+                _candidate = f"{_db_host}.{_region}-postgres.render.com"
+                try:
+                    socket.gethostbyname(_candidate)
+                    _db_host = _candidate
+                    break
+                except (socket.gaierror, OSError):
+                    pass
+
     if '.' in _db_host and _db_host not in ('127.0.0.1', 'localhost'):
         if 'sslmode' not in _db_options:
             _db_options['sslmode'] = 'require'

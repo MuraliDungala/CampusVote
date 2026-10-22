@@ -32,6 +32,10 @@ services:
         value: "channels.layers.InMemoryChannelLayer"
       - key: MONITORING_PRIVACY_SUPPRESSION_THRESHOLD
         value: "5"
+      - key: VERIFICATION_DELIVERY_PROVIDER
+        value: "email"
+      - key: DEFAULT_FROM_EMAIL
+        value: "CampusVote Election Authority <noreply@campusvote.edu>"
 
 databases:
   # ==============================================================================

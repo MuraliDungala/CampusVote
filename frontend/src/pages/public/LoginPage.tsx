@@ -103,6 +103,8 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
+    if (isStartingVerification) return;
+
     setIsStartingVerification(true);
     try {
       const response = await startCollegeIdVerification({
@@ -128,12 +130,29 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
+      if (code === 'DELIVERY_PROVIDER_UNAVAILABLE') {
+        setFormError(
+          err?.details?.error ||
+          'Email delivery is currently not configured or unreachable on the server. Please contact your college election administrator.'
+        );
+        return;
+      }
+
+      if (err?.status === 503 || err?.status === 500) {
+        setFormError('The verification service is temporarily unavailable. Please try again shortly.');
+        return;
+      }
+
       const msg = err?.details?.error || err?.message || 'Verification initiation failed. Please check your College ID or email.';
-      setFormError(msg);
+      const cleanMsg = typeof msg === 'string' && (msg.includes('<html') || msg.includes('<!doctype'))
+        ? 'A server communication error occurred. Please try again shortly.'
+        : msg;
+
+      setFormError(cleanMsg);
       if (
-        msg.toLowerCase().includes('not found') ||
-        msg.toLowerCase().includes('register') ||
-        err?.details?.code === 'STUDENT_NOT_FOUND'
+        cleanMsg.toLowerCase().includes('not found') ||
+        cleanMsg.toLowerCase().includes('register') ||
+        code === 'STUDENT_NOT_FOUND'
       ) {
         setIsUnregistered(true);
       }
@@ -305,9 +324,18 @@ export const LoginPage: React.FC = () => {
                 className="p-3.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs flex flex-col gap-2"
                 role="alert"
               >
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="font-medium leading-relaxed">{formError || authError}</span>
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="font-medium leading-relaxed">{formError || authError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setFormError(null); clearError(); }}
+                    className="text-red-500 hover:text-red-800 font-semibold text-[11px] underline shrink-0 cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
                 </div>
                 {isUnregistered && (
                   <div className="pt-2 border-t border-red-200/60 flex items-center justify-between">

@@ -58,17 +58,19 @@ class MockDeliveryProvider(BaseDeliveryProvider):
     def send_otp(self, destination: str, otp: str, student_name: str = '') -> bool:
         # Prevent mock delivery in true production
         if not settings.DEBUG and not getattr(settings, 'ALLOW_MOCK_DELIVERY_IN_TESTS', False):
-            raise RuntimeError(
-                "MockDeliveryProvider is strictly prohibited in a production environment. "
-                "Configure a real Email or SMS delivery provider."
+            logger.error(
+                "MockDeliveryProvider cannot dispatch live verification codes in production (DEBUG=False). "
+                "A real institutional Email (SMTP) or SMS delivery provider must be configured."
             )
+            return False
 
         self._delivery_log.append({
             'destination': destination,
             'otp': otp,
             'student_name': student_name,
         })
-        logger.info(f"[DEV_MOCK_DELIVERY] Delivered OTP to {destination} for student '{student_name}'.")
+        if settings.DEBUG:
+            logger.info(f"[DEV_MOCK_DELIVERY] Delivered OTP to {destination} for student '{student_name}'.")
         return True
 
 
@@ -119,7 +121,11 @@ def get_delivery_provider(channel: str = 'EMAIL') -> BaseDeliveryProvider:
     Resolves active delivery provider based on settings and environment.
     Fails safely if configuration is invalid.
     """
-    provider_name = getattr(settings, 'VERIFICATION_DELIVERY_PROVIDER', 'mock').lower()
+    provider_name = getattr(
+        settings,
+        'VERIFICATION_DELIVERY_PROVIDER',
+        'mock' if settings.DEBUG else 'email'
+    ).lower()
 
     if provider_name == 'mock':
         return MockDeliveryProvider()
@@ -130,4 +136,8 @@ def get_delivery_provider(channel: str = 'EMAIL') -> BaseDeliveryProvider:
     else:
         if settings.DEBUG:
             return MockDeliveryProvider()
-        raise ValueError(f"Unknown or unconfigured delivery provider: '{provider_name}'")
+        logger.error(
+            f"Unknown or unconfigured delivery provider '{provider_name}'. "
+            "Falling back to EmailDeliveryProvider."
+        )
+        return EmailDeliveryProvider()

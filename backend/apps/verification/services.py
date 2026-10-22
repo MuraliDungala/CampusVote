@@ -198,12 +198,17 @@ class VerificationService:
             session.save()
 
         # Dispatch OTP via provider
-        provider = get_delivery_provider(channel='EMAIL')
-        delivery_ok = provider.send_otp(
-            destination=trusted_destination,
-            otp=otp_code,
-            student_name=student.full_name
-        )
+        delivery_ok = False
+        try:
+            provider = get_delivery_provider(channel='EMAIL')
+            delivery_ok = provider.send_otp(
+                destination=trusted_destination,
+                otp=otp_code,
+                student_name=student.full_name
+            )
+        except Exception as exc:
+            logger.exception("Verification delivery provider encountered an unhandled exception")
+            delivery_ok = False
 
         if not delivery_ok:
             log_audit_event(
@@ -215,7 +220,14 @@ class VerificationService:
             )
             session.state = VerificationState.FAILED
             session.save(update_fields=['state', 'updated_at'])
-            return False, {}, "Failed to deliver verification code. Please try again later or contact support."
+            return False, {
+                'code': 'DELIVERY_PROVIDER_UNAVAILABLE',
+                'channel': channel,
+                'destination_masked': masked_dest,
+            }, (
+                "Unable to deliver verification code. The institutional email delivery service is currently "
+                "not configured or unreachable. Please contact your college election administrator."
+            )
 
         # Audit success
         log_audit_event(
@@ -335,6 +347,7 @@ class VerificationService:
                         last_name=last_name,
                         role=Role.STUDENT,
                         status=AccountStatus.ACTIVE,
+                        institution=student.institution,
                     )
                     student.user = user
                     student.save(update_fields=['user', 'updated_at'])
@@ -408,12 +421,17 @@ class VerificationService:
             session.save()
 
         # Send OTP
-        provider = get_delivery_provider(channel=session.channel)
-        delivery_ok = provider.send_otp(
-            destination=student.email,
-            otp=new_otp,
-            student_name=student.full_name
-        )
+        delivery_ok = False
+        try:
+            provider = get_delivery_provider(channel=session.channel)
+            delivery_ok = provider.send_otp(
+                destination=student.email,
+                otp=new_otp,
+                student_name=student.full_name
+            )
+        except Exception as exc:
+            logger.exception("Verification resend provider encountered an unhandled exception")
+            delivery_ok = False
 
         if not delivery_ok:
             log_audit_event(
@@ -423,7 +441,12 @@ class VerificationService:
                 metadata={'college_id': session.college_id, 'resend': True},
                 request=request
             )
-            return False, {}, "Failed to deliver verification code. Please try again."
+            return False, {
+                'code': 'DELIVERY_PROVIDER_UNAVAILABLE',
+            }, (
+                "Unable to deliver verification code. The email delivery service is currently unavailable. "
+                "Please try again shortly or contact your administrator."
+            )
 
         log_audit_event(
             action=AuditAction.OTP_CHALLENGE_ISSUED,

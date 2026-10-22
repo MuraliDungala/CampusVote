@@ -3,6 +3,7 @@ API Views for College ID, OTP, and QR Identity Verification.
 CampusVote Smart ID-Based College Voting System.
 """
 
+import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -18,6 +19,8 @@ from apps.verification.serializers import (
 )
 from apps.verification.services import VerificationService
 from apps.verification.qr_service import generate_signed_qr_payload
+
+logger = logging.getLogger(__name__)
 
 
 class VerificationStartView(APIView):
@@ -45,18 +48,33 @@ class VerificationStartView(APIView):
             client_ip = client_ip.split(',')[0].strip()
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
-        success, data, error_msg = VerificationService.start_verification(
-            college_id=college_id,
-            channel=channel,
-            ip_address=client_ip,
-            user_agent=user_agent,
-            request=request
-        )
+        try:
+            success, data, error_msg = VerificationService.start_verification(
+                college_id=college_id,
+                channel=channel,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                request=request
+            )
+        except Exception as exc:
+            logger.exception("Unhandled server exception during verification start: %s", exc)
+            return Response(
+                {
+                    "error": "The verification service is temporarily unavailable. Please try again shortly.",
+                    "details": {"code": "SERVICE_UNAVAILABLE"}
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if not success:
+            http_status = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if data.get('code') == 'DELIVERY_PROVIDER_UNAVAILABLE'
+                else status.HTTP_400_BAD_REQUEST
+            )
             return Response(
                 {"error": error_msg or "Verification initialization failed.", "details": data},
-                status=status.HTTP_400_BAD_REQUEST
+                status=http_status
             )
 
         return Response(data, status=status.HTTP_200_OK)
@@ -82,11 +100,21 @@ class VerificationOtpVerifyView(APIView):
         session_id = str(serializer.validated_data['session_id'])
         otp = serializer.validated_data['otp']
 
-        success, data, error_msg = VerificationService.verify_otp(
-            session_id=session_id,
-            candidate_otp=otp,
-            request=request
-        )
+        try:
+            success, data, error_msg = VerificationService.verify_otp(
+                session_id=session_id,
+                candidate_otp=otp,
+                request=request
+            )
+        except Exception as exc:
+            logger.exception("Unhandled server exception during OTP verification: %s", exc)
+            return Response(
+                {
+                    "error": "The verification service is temporarily unavailable. Please try again shortly.",
+                    "details": {"code": "SERVICE_UNAVAILABLE"}
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if not success:
             http_status = status.HTTP_423_LOCKED if data.get('is_locked') else status.HTTP_400_BAD_REQUEST
@@ -116,15 +144,31 @@ class VerificationOtpResendView(APIView):
 
         session_id = str(serializer.validated_data['session_id'])
 
-        success, data, error_msg = VerificationService.resend_otp(
-            session_id=session_id,
-            request=request
-        )
+        try:
+            success, data, error_msg = VerificationService.resend_otp(
+                session_id=session_id,
+                request=request
+            )
+        except Exception as exc:
+            logger.exception("Unhandled server exception during OTP resend: %s", exc)
+            return Response(
+                {
+                    "error": "The verification service is temporarily unavailable. Please try again shortly.",
+                    "details": {"code": "SERVICE_UNAVAILABLE"}
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if not success:
+            if data.get('code') == 'DELIVERY_PROVIDER_UNAVAILABLE':
+                http_status = status.HTTP_503_SERVICE_UNAVAILABLE
+            elif 'wait' in (error_msg or '').lower():
+                http_status = status.HTTP_429_TOO_MANY_REQUESTS
+            else:
+                http_status = status.HTTP_400_BAD_REQUEST
             return Response(
                 {"error": error_msg or "Failed to resend code.", "details": data},
-                status=status.HTTP_429_TOO_MANY_REQUESTS if 'wait' in error_msg.lower() else status.HTTP_400_BAD_REQUEST
+                status=http_status
             )
 
         return Response(data, status=status.HTTP_200_OK)

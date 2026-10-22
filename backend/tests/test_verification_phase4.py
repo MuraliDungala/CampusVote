@@ -430,3 +430,51 @@ class VerificationPhase4Tests(TestCase):
         self.assertEqual(mask_destination('aarav.sharma@campusvote.edu'), 'a***a@campusvote.edu')
         self.assertEqual(mask_destination('al@campusvote.edu'), 'a***@campusvote.edu')
         self.assertEqual(mask_destination('+1987654321', channel='SMS'), '+1 *** *** 4321')
+
+    # 27. Production mock provider safely reports delivery failure without crashing server
+    @override_settings(DEBUG=False, ALLOW_MOCK_DELIVERY_IN_TESTS=False, VERIFICATION_DELIVERY_PROVIDER='mock')
+    def test_27_production_unconfigured_provider_returns_safe_503_not_unhandled_crash(self):
+        url = reverse('verification:verification-start')
+        res = self.client.post(url, {'college_id': 'CS2026001'})
+        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(res.data.get('details', {}).get('code'), 'DELIVERY_PROVIDER_UNAVAILABLE')
+        self.assertIn('institutional email delivery service', res.data.get('error', ''))
+
+    # 28. SMTP provider network error caught safely with structured 503 response
+    @override_settings(DEBUG=False, VERIFICATION_DELIVERY_PROVIDER='email')
+    def test_28_smtp_network_failure_handled_gracefully(self):
+        from unittest.mock import patch
+        with patch('apps.verification.providers.send_mail', side_effect=OSError("Connection refused")):
+            url = reverse('verification:verification-start')
+            res = self.client.post(url, {'college_id': 'CS2026001'})
+            self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+            self.assertEqual(res.data.get('details', {}).get('code'), 'DELIVERY_PROVIDER_UNAVAILABLE')
+            self.assertIn('not configured or unreachable', res.data.get('error', ''))
+
+    # 29. OTP verification provisions User account with student institution for multi-tenant isolation
+    def test_29_student_user_provisioning_inherits_institution(self):
+        from apps.accounts.models import Institution
+        inst = Institution.objects.create(
+            code='GMRIT-TEST',
+            name='GMR Institute of Technology Test',
+            email_domain='gmrit.edu.in'
+        )
+        self.student.institution = inst
+        self.student.save(update_fields=['institution'])
+
+        # Start verification
+        url_start = reverse('verification:verification-start')
+        res_start = self.client.post(url_start, {'college_id': 'CS2026001'})
+        self.assertEqual(res_start.status_code, status.HTTP_200_OK)
+        session_id = res_start.data['session_id']
+        otp = MockDeliveryProvider.get_last_otp()
+
+        # Verify OTP
+        url_verify = reverse('verification:verification-otp-verify')
+        res_verify = self.client.post(url_verify, {'session_id': session_id, 'otp': otp})
+        self.assertEqual(res_verify.status_code, status.HTTP_200_OK)
+
+        user = User.objects.get(college_id='CS2026001')
+        self.assertEqual(user.institution, inst)
+        self.assertEqual(user.role, Role.STUDENT)
+

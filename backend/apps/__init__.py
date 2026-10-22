@@ -1,0 +1,3 @@
+"""
+CampusVote Domain Apps Namespace.
+"""

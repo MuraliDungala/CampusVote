@@ -1,0 +1,49 @@
+# ==============================================================================
+# CampusVote - Staging Infrastructure Stack (Docker Compose)
+# Orchestrates PostgreSQL 15, Redis 7.2, Daphne ASGI Workers, and NGINX Proxy
+# ==============================================================================
+version: '3.8'
+
+services:
+  # 1. Primary Relational Store: PostgreSQL 15
+  postgres:
+    image: postgres:15-alpine
+    container_name: campusvote_staging_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-campusvote_staging}
+      POSTGRES_USER: ${DB_USER:-campusvote_staging_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-staging_secure_password_replace_in_env}
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-campusvote_staging_user} -d ${DB_NAME:-campusvote_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # 2. WebSocket Channel Layer & Cache: Redis 7.2
+  redis:
+    image: redis:7.2-alpine
+    container_name: campusvote_staging_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - staging_redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  staging_postgres_data:
+    driver: local
+  staging_redis_data:
+    driver: local

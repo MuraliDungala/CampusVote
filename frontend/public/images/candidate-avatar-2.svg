@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F766E" />
+      <stop offset="100%" stop-color="#14B8A6" />
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="100" fill="url(#bg2)" />
+  <!-- Student 2 Portrait -->
+  <circle cx="100" cy="82" r="38" fill="#FDE68A" />
+  <!-- Hair (Longer style) -->
+  <path d="M56,85 C56,40 78,32 100,32 C122,32 144,40 144,85 C144,120 138,135 132,135 C132,95 125,50 100,50 C75,50 68,95 68,135 C62,135 56,120 56,85 Z" fill="#451A03" />
+  <!-- Eyes -->
+  <circle cx="85" cy="78" r="3" fill="#1E293B" />
+  <circle cx="115" cy="78" r="3" fill="#1E293B" />
+  <!-- Smile -->
+  <path d="M88,98 Q100,108 112,98" stroke="#1E293B" stroke-width="2.5" fill="none" stroke-linecap="round" />
+  <!-- Shoulders / Blouse -->
+  <path d="M48,190 C48,145 70,135 100,135 C130,135 152,145 152,190 Z" fill="#0B2C54" />
+  <path d="M85,135 Q100,160 115,135 Z" fill="#38BDF8" />
+</svg>

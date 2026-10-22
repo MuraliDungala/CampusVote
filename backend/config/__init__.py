@@ -1,0 +1,3 @@
+"""
+CampusVote Django Configuration Package.
+"""

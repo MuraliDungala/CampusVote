@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-surface-canvas text-slate-800 antialiased min-h-screen selection:bg-brand-cyan selection:text-white;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-navy-950 tracking-tight;
+  }
+
+  /* Accessible focus indicators for keyboard navigation */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-cyan ring-offset-2 ring-offset-white;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/90 backdrop-blur-md border border-white/60 shadow-card;
+  }
+  
+  .glass-dark {
+    @apply bg-navy-900/90 backdrop-blur-md border border-navy-700/50 text-white shadow-elevated;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-navy-900 via-brand-primary to-brand-cyan bg-clip-text text-transparent;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

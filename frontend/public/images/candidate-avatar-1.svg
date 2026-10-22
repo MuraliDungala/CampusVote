@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="100" fill="url(#bg1)" />
+  <!-- Student 1 Portrait -->
+  <circle cx="100" cy="80" r="38" fill="#FCD34D" />
+  <!-- Hair -->
+  <path d="M60,75 C60,45 80,35 100,35 C120,35 140,45 140,75 C140,55 125,48 100,48 C75,48 60,55 60,75 Z" fill="#1E293B" />
+  <!-- Glasses -->
+  <rect x="75" y="72" width="20" height="15" rx="3" fill="none" stroke="#071D38" stroke-width="2.5" />
+  <rect x="105" y="72" width="20" height="15" rx="3" fill="none" stroke="#071D38" stroke-width="2.5" />
+  <line x1="95" y1="78" x2="105" y2="78" stroke="#071D38" stroke-width="2.5" />
+  <!-- Smile -->
+  <path d="M88,96 Q100,106 112,96" stroke="#071D38" stroke-width="2.5" fill="none" stroke-linecap="round" />
+  <!-- Shoulders / Blazer -->
+  <path d="M45,190 C45,145 68,135 100,135 C132,135 155,145 155,190 Z" fill="#071D38" />
+  <!-- Collar / Shirt -->
+  <polygon points="100,135 85,160 100,175 115,160" fill="#FFFFFF" />
+  <polygon points="100,150 94,185 100,195 106,185" fill="#DC2626" />
+</svg>

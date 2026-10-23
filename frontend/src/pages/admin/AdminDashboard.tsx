@@ -12,7 +12,9 @@ import {
   ArrowRight,
   TrendingUp,
   FileCheck,
-  Building2
+  Building2,
+  UserCheck,
+  Clock,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
@@ -234,8 +236,66 @@ export const AdminDashboard: React.FC = () => {
             </Card>
           </div>
 
+          {/* Action Required: Pending Student Registrations Banner */}
+          {(studentSummary?.pending_students || (studentSummary?.by_enrollment_status?.PENDING ?? 0)) > 0 && (
+            <div className="p-4 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-white to-amber-50/70 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-subtle animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-950">
+                      Action Required: {studentSummary?.pending_students || studentSummary?.by_enrollment_status?.PENDING} New Student Registration{(studentSummary?.pending_students || studentSummary?.by_enrollment_status?.PENDING || 0) > 1 ? 's' : ''} Awaiting Approval
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    New students registered under {activeCollegeName} need your administrative acceptance before they can cast ballots.
+                  </p>
+                </div>
+              </div>
+              <Link to="/admin/students?enrollment_status=PENDING">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs whitespace-nowrap shadow-sm"
+                  leftIcon={<Clock className="w-3.5 h-3.5" />}
+                >
+                  Review & Accept Students ({studentSummary?.pending_students || studentSummary?.by_enrollment_status?.PENDING})
+                </Button>
+              </Link>
+            </div>
+          )}
+
           {/* Quick Action Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Link to="/admin/students?enrollment_status=PENDING" className="block">
+              <Card hoverEffect className={`h-full border ${(studentSummary?.pending_students || (studentSummary?.by_enrollment_status?.PENDING ?? 0)) > 0 ? 'border-amber-300 bg-amber-50/20 ring-1 ring-amber-300' : 'border-slate-200'}`}>
+                <CardContent className="p-5 flex flex-col justify-between h-full">
+                  <div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-navy-950">Student Approvals</h3>
+                      {(studentSummary?.pending_students || (studentSummary?.by_enrollment_status?.PENDING ?? 0)) > 0 && (
+                        <Badge variant="warning" size="sm">
+                          {studentSummary?.pending_students || studentSummary?.by_enrollment_status?.PENDING} Pending
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Review and accept incoming student registrations under your college.
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-semibold text-amber-700">
+                    <span>Accept Students &rarr;</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
             <Link to="/admin/elections" className="block">
               <Card hoverEffect className="h-full border border-slate-200">
                 <CardContent className="p-5 flex flex-col justify-between h-full">

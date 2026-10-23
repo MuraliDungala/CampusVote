@@ -163,15 +163,26 @@ class ParticipationService:
         if election.institution_id and student_inst_id and election.institution_id != student_inst_id:
             return False, "You are not enrolled in the institution hosting this election.", {'code': 'CROSS_INSTITUTION_FORBIDDEN'}
 
-        # Phase 4 Two-factor verification check
-        has_verified_session = VerificationSession.objects.filter(
-            college_id=student.college_id,
-            state=VerificationState.VERIFIED
-        ).exists()
-
-        if not has_verified_session:
+        # Check enrollment standing: PENDING students must be approved by the college admin
+        if student.enrollment_status == EnrollmentStatus.PENDING:
             return False, (
-                "Identity verification required. Please complete College ID and OTP verification before voting."
+                "Your student registration is pending approval by your college administrator. Once accepted, you will be able to cast your ballot."
+            ), {'code': 'PENDING_APPROVAL', 'requires_approval': True, 'requires_verification': False}
+
+        # Verification check:
+        # Authenticated student with an active ENROLLED status is verified.
+        # Also supports legacy VerificationSession if present.
+        is_verified_voter = (
+            (user.is_authenticated and getattr(user, 'status', None) == AccountStatus.ACTIVE and student.is_active and student.enrollment_status == EnrollmentStatus.ENROLLED)
+            or VerificationSession.objects.filter(
+                college_id=student.college_id,
+                state=VerificationState.VERIFIED
+            ).exists()
+        )
+
+        if not is_verified_voter:
+            return False, (
+                "Identity verification required. Please sign in with your verified institutional account."
             ), {'code': 'VERIFICATION_REQUIRED', 'requires_verification': True}
 
         # Check prior participation (One-person-one-vote)

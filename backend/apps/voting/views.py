@@ -59,6 +59,7 @@ class BallotDefinitionView(APIView):
             'reason': elig_reason if not is_eligible else 'Eligible to vote',
             'code': elig_meta.get('code', 'UNKNOWN'),
             'requires_verification': elig_meta.get('requires_verification', False),
+            'requires_approval': elig_meta.get('requires_approval', False),
             'has_participated': elig_meta.get('has_participated', False),
         }
 

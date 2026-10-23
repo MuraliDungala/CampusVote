@@ -7,7 +7,8 @@ import {
   FileSpreadsheet,
   ShieldCheck,
   FileText,
-  Layers
+  Layers,
+  UserCheck,
 } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ portalType }) => {
     { name: 'Election Management', href: '/admin/elections', icon: Vote },
     { name: 'Create New Election', href: '/admin/elections/new', icon: Layers },
     { name: 'Student Registry', href: '/admin/students', icon: Users },
+    { name: 'Student Approvals', href: '/admin/students?enrollment_status=PENDING', icon: UserCheck },
     { name: 'Batch Roster Ingestion', href: '/admin/students/import', icon: FileSpreadsheet },
   ];
 

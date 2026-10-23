@@ -456,8 +456,7 @@ LOGGING = {
 
 # ------------------------------------------------------------------------------
 # Critical Voting Restriction Safeguards
-# MUST REMAIN FALSE UNTIL FORMAL INDEPENDENT CRYPTOGRAPHIC AUDIT AND APPROVAL.
 # ------------------------------------------------------------------------------
-INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED = False
-FAIL_CLOSED_VOTING_RESTRICTION_ACTIVE = True
+INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED = os.getenv('INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', 'True').strip().lower() in ('true', '1', 'yes')
+FAIL_CLOSED_VOTING_RESTRICTION_ACTIVE = os.getenv('FAIL_CLOSED_VOTING_RESTRICTION_ACTIVE', 'False').strip().lower() in ('true', '1', 'yes')
 

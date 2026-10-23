@@ -27,6 +27,7 @@ export interface BallotVoterStatus {
   reason: string;
   code: string;
   requires_verification: boolean;
+  requires_approval?: boolean;
   has_participated: boolean;
 }
 

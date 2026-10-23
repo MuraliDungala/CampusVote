@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileSpreadsheet,
   UserPlus,
   Search,
   Users,
   ShieldCheck,
-  UserX,
   Building2,
   Eye,
   Edit2,
@@ -15,6 +14,8 @@ import {
   ChevronRight,
   RotateCcw,
   CheckCircle2,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { Sidebar } from '../../components/layout/Sidebar';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -45,6 +46,7 @@ import { StudentDeactivateModal } from '../../components/students/StudentDeactiv
 
 export const StudentListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Data states
   const [students, setStudents] = useState<Student[]>([]);
@@ -59,7 +61,16 @@ export const StudentListPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
   const [academicYear, setAcademicYear] = useState('');
-  const [enrollmentStatus, setEnrollmentStatus] = useState('');
+  const initialStatus = searchParams.get('enrollment_status') || searchParams.get('status') || '';
+  const [enrollmentStatus, setEnrollmentStatus] = useState(initialStatus);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('enrollment_status') || searchParams.get('status');
+    if (statusParam !== null && statusParam !== enrollmentStatus) {
+      setEnrollmentStatus(statusParam);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   // Modals state
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -203,9 +214,43 @@ export const StudentListPage: React.FC = () => {
             </div>
           )}
 
+          {/* Action Required Banner for Pending Student Registrations */}
+          {(summary?.pending_students || (summary?.by_enrollment_status?.PENDING ?? 0)) > 0 && (
+            <div className="p-4 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-white to-amber-50/70 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-subtle animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-950">
+                      Action Required: {summary?.pending_students || summary?.by_enrollment_status?.PENDING} New Student Registration{(summary?.pending_students || summary?.by_enrollment_status?.PENDING || 0) > 1 ? 's' : ''} Awaiting Approval
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    Students registered under your college require administrative acceptance before they can cast ballots in published elections.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setEnrollmentStatus('PENDING');
+                  setPage(1);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs whitespace-nowrap shadow-sm"
+                leftIcon={<Clock className="w-3.5 h-3.5" />}
+              >
+                Review & Accept ({summary?.pending_students || summary?.by_enrollment_status?.PENDING})
+              </Button>
+            </div>
+          )}
+
           {/* Metric Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
+            <Card hoverEffect onClick={() => { setEnrollmentStatus(''); setPage(1); }} className="cursor-pointer">
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-brand-primary flex items-center justify-center shrink-0">
                   <Users className="w-6 h-6" />
@@ -219,13 +264,40 @@ export const StudentListPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card
+              hoverEffect
+              onClick={() => { setEnrollmentStatus('PENDING'); setPage(1); }}
+              className={`cursor-pointer ${
+                (summary?.pending_students || (summary?.by_enrollment_status?.PENDING ?? 0)) > 0
+                  ? 'border-amber-300 bg-amber-50/40 ring-1 ring-amber-300'
+                  : ''
+              }`}
+            >
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-amber-800 font-bold">Pending Approvals</p>
+                    {(summary?.pending_students || (summary?.by_enrollment_status?.PENDING ?? 0)) > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold text-amber-700">
+                    {summary?.pending_students ?? summary?.by_enrollment_status?.PENDING ?? 0}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card hoverEffect onClick={() => { setEnrollmentStatus('ENROLLED'); setPage(1); }} className="cursor-pointer">
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 font-medium">Active Voter Records</p>
+                  <p className="text-xs text-slate-500 font-medium">Active Enrolled</p>
                   <p className="text-2xl font-bold text-emerald-700">
                     {summary ? summary.active_students : '—'}
                   </p>
@@ -235,31 +307,58 @@ export const StudentListPage: React.FC = () => {
 
             <Card>
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                  <UserX className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Deactivated Records</p>
-                  <p className="text-2xl font-bold text-red-700">
-                    {summary ? summary.inactive_students : '—'}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                   <Building2 className="w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Active Departments</p>
-                  <p className="text-2xl font-bold text-amber-700">
+                  <p className="text-2xl font-bold text-purple-700">
                     {summary ? Object.keys(summary.by_department).length : '—'}
                   </p>
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Quick Filter Status Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => { setEnrollmentStatus(''); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                !enrollmentStatus
+                  ? 'bg-navy-900 text-white shadow-sm'
+                  : 'bg-white border border-surface-border text-slate-600 hover:bg-surface-subtle'
+              }`}
+            >
+              All Students ({summary ? summary.total_students : totalCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEnrollmentStatus('PENDING'); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all ${
+                enrollmentStatus === 'PENDING'
+                  ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-300'
+                  : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pending Approvals ({summary?.pending_students ?? summary?.by_enrollment_status?.PENDING ?? 0})</span>
+              {(summary?.pending_students || (summary?.by_enrollment_status?.PENDING ?? 0)) > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEnrollmentStatus('ENROLLED'); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                enrollmentStatus === 'ENROLLED'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'bg-white border border-surface-border text-slate-600 hover:bg-surface-subtle'
+              }`}
+            >
+              Enrolled Active ({summary ? summary.active_students : '—'})
+            </button>
           </div>
 
           {/* Search and Filters Bar */}
@@ -325,6 +424,7 @@ export const StudentListPage: React.FC = () => {
                 className="text-xs px-3 py-2 rounded-xl border border-surface-border bg-white text-slate-700 focus:border-brand-500"
               >
                 <option value="">All Standings</option>
+                <option value="PENDING">Pending Approval</option>
                 <option value="ENROLLED">Enrolled</option>
                 <option value="ON_LEAVE">On Leave</option>
                 <option value="SUSPENDED">Suspended</option>
@@ -461,15 +561,16 @@ export const StudentListPage: React.FC = () => {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
                             {student.enrollment_status === 'PENDING' && (
-                              <button
-                                type="button"
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => handleApproveStudent(student)}
-                                className="p-1.5 rounded-lg text-emerald-600 hover:text-white hover:bg-emerald-600 transition-colors bg-emerald-50 border border-emerald-200"
-                                title="Approve & Verify Student Enrollment"
-                                aria-label={`Approve ${student.full_name}`}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 shadow-sm whitespace-nowrap mr-1"
+                                leftIcon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                title="Accept and approve student enrollment"
                               >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </button>
+                                Accept Student
+                              </Button>
                             )}
                             <button
                               type="button"

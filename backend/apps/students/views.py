@@ -48,10 +48,15 @@ class StudentListCreateView(APIView):
     def get(self, request, *args, **kwargs):
         queryset = Student.objects.all().select_related('institution', 'user')
 
-        # Institution scoping: Non-superadmin election administrators see only their institution's roster
+        # Institution scoping: Non-superadmin election administrators see their institution's roster
         if request.user.role == Role.ELECTION_ADMIN and not getattr(request.user, 'is_superuser', False):
             if getattr(request.user, 'institution_id', None):
-                queryset = queryset.filter(institution_id=request.user.institution_id)
+                inst = request.user.institution
+                queryset = queryset.filter(
+                    Q(institution_id=request.user.institution_id) |
+                    Q(college_name__iexact=inst.name) |
+                    Q(college_name__iexact=inst.code)
+                )
 
         # Search by college_id or full_name
         search = request.query_params.get('search', '').strip()
@@ -231,15 +236,37 @@ class StudentApproveView(APIView):
 
         from apps.students.models import EnrollmentStatus
         from apps.accounts.models import AccountStatus
+        from apps.verification.models import VerificationSession, VerificationState, DeliveryMethod
 
         student.enrollment_status = EnrollmentStatus.ENROLLED
         student.is_active = True
-        student.save(update_fields=['enrollment_status', 'is_active', 'updated_at'])
+        update_fields = ['enrollment_status', 'is_active', 'updated_at']
+
+        # Ensure student is linked to the approving admin's institution
+        if getattr(request.user, 'institution_id', None) and not student.institution_id:
+            student.institution = request.user.institution
+            update_fields.append('institution')
+
+        student.save(update_fields=update_fields)
 
         if student.user:
+            user_update_fields = ['status', 'is_active']
             student.user.status = AccountStatus.ACTIVE
             student.user.is_active = True
-            student.user.save(update_fields=['status', 'is_active'])
+            if getattr(request.user, 'institution_id', None) and not student.user.institution_id:
+                student.user.institution = request.user.institution
+                user_update_fields.append('institution')
+            student.user.save(update_fields=user_update_fields)
+
+        # Mark VerificationSession as VERIFIED to ensure immediate voting capability
+        VerificationSession.objects.update_or_create(
+            college_id=student.college_id,
+            defaults={
+                'state': VerificationState.VERIFIED,
+                'email': student.email or (student.user.email if student.user else ''),
+                'delivery_method': DeliveryMethod.EMAIL,
+            }
+        )
 
         log_audit_event(
             action=AuditAction.STUDENT_UPDATED,
@@ -272,11 +299,18 @@ class StudentSummaryView(APIView):
         queryset = Student.objects.all()
         if request.user.role == Role.ELECTION_ADMIN and not getattr(request.user, 'is_superuser', False):
             if getattr(request.user, 'institution_id', None):
-                queryset = queryset.filter(institution_id=request.user.institution_id)
+                inst = request.user.institution
+                queryset = queryset.filter(
+                    Q(institution_id=request.user.institution_id) |
+                    Q(college_name__iexact=inst.name) |
+                    Q(college_name__iexact=inst.code)
+                )
 
         total_students = queryset.count()
         active_students = queryset.filter(is_active=True).count()
         inactive_students = total_students - active_students
+        from apps.students.models import EnrollmentStatus
+        pending_students = queryset.filter(enrollment_status=EnrollmentStatus.PENDING).count()
 
         # Breakdown by department
         depts = (
@@ -306,6 +340,7 @@ class StudentSummaryView(APIView):
             'total_students': total_students,
             'active_students': active_students,
             'inactive_students': inactive_students,
+            'pending_students': pending_students,
             'by_department': by_department,
             'by_academic_year': by_academic_year,
             'by_enrollment_status': by_enrollment_status,
@@ -551,19 +586,44 @@ class StudentRegistrationView(APIView):
             )
 
         # 2. Resolve institution
-        from apps.accounts.models import Institution, InstitutionStatus
+        from apps.accounts.models import Institution, InstitutionStatus, User, Role
         import re
+        clean_college = college_name.strip()
+        clean_normalized = re.sub(r'[^a-z0-9]', '', clean_college.lower())
         email_domain = email.split('@')[1].strip().lower() if '@' in email else ''
-        institution = Institution.objects.filter(name__iexact=college_name).first()
-        if not institution and email_domain:
+
+        # Match 1: Exact case-insensitive name
+        institution = Institution.objects.filter(name__iexact=clean_college).first()
+        # Match 2: Exact code match (e.g. GMRIT)
+        if not institution and clean_college:
+            institution = Institution.objects.filter(code__iexact=clean_college).first()
+        # Match 3: Normalized name match
+        if not institution and clean_normalized:
+            institution = Institution.objects.filter(normalized_name=clean_normalized).first()
+        # Match 4: Substring name match
+        if not institution and len(clean_college) >= 3:
+            institution = Institution.objects.filter(name__icontains=clean_college).first()
+        # Match 5: By college admin institution whose name or code matches
+        if not institution and clean_college:
+            admin_user = User.objects.filter(
+                role=Role.ELECTION_ADMIN,
+                institution__isnull=False
+            ).filter(
+                Q(institution__name__icontains=clean_college) | Q(institution__code__icontains=clean_college)
+            ).first()
+            if admin_user and admin_user.institution:
+                institution = admin_user.institution
+        # Match 6: By institutional email domain
+        if not institution and email_domain and email_domain not in ('gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'):
             institution = Institution.objects.filter(email_domain__iexact=email_domain).first()
+
+        # Fallback: create institution if completely new
         if not institution:
-            clean_name = re.sub(r'[^a-z0-9]', '', college_name.lower())
             institution = Institution.objects.create(
                 code=f"COL-{secrets.token_hex(3).upper()}",
-                name=college_name,
-                normalized_name=clean_name,
-                email_domain=email_domain,
+                name=clean_college,
+                normalized_name=clean_normalized,
+                email_domain=email_domain if email_domain not in ('gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com') else '',
                 status=InstitutionStatus.PENDING_VERIFICATION,
                 is_demo=True,
             )

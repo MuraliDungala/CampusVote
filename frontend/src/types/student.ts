@@ -26,6 +26,7 @@ export interface StudentSummary {
   total_students: number;
   active_students: number;
   inactive_students: number;
+  pending_students?: number;
   by_department: Record<string, number>;
   by_academic_year: Record<string, number>;
   by_enrollment_status: Record<string, number>;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   GraduationCap,
@@ -17,7 +17,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { FormField } from '../../components/ui/FormField';
-import { registerStudent, StudentRegistrationResponse } from '../../services/auth';
+import { registerStudent, fetchInstitutions, StudentRegistrationResponse, InstitutionItem } from '../../services/auth';
 
 export const ACADEMIC_DEPARTMENTS = [
   'Computer Science and Engineering',
@@ -47,6 +47,11 @@ export const RegisterPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [registrationSuccess, setRegistrationSuccess] = useState<StudentRegistrationResponse | null>(null);
+  const [institutions, setInstitutions] = useState<InstitutionItem[]>([]);
+
+  useEffect(() => {
+    fetchInstitutions().then(setInstitutions).catch(() => {});
+  }, []);
 
   // Safely extract readable error messages from any API or network error
   const extractErrorMessage = (err: any): string => {
@@ -330,12 +335,20 @@ export const RegisterPage: React.FC = () => {
                   >
                     <Input
                       id="reg-college-name"
+                      list="institutions-options"
                       value={collegeName}
                       onChange={(e) => setCollegeName(e.target.value)}
                       leftIcon={<Building2 className="w-4 h-4" />}
                       disabled={isLoading}
                       required
                     />
+                    <datalist id="institutions-options">
+                      {institutions.map((inst) => (
+                        <option key={inst.id} value={inst.name}>
+                          {inst.code ? `${inst.name} (${inst.code})` : inst.name}
+                        </option>
+                      ))}
+                    </datalist>
                   </FormField>
 
                   <FormField

@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Vote,
   Lock,
+  Clock,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -159,6 +160,28 @@ export const BallotPage: React.FC = () => {
             </Link>
             <Link to="/student/dashboard">
               <Button variant="primary" size="sm">Return to Dashboard</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (voter_status?.requires_approval) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <Card className="shadow-elevated p-8 text-center border-amber-200 bg-amber-50/40">
+          <Clock className="w-12 h-12 text-amber-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-navy-950 mb-2">Registration Pending Institutional Approval</h2>
+          <p className="text-sm text-slate-600 mb-6 max-w-lg mx-auto">
+            Your student account is awaiting review and approval by your college administrator. Once accepted, you will have immediate access to cast your ballot.
+          </p>
+          <div className="flex justify-center gap-3">
+            <Link to="/elections">
+              <Button variant="outline" size="sm">Browse Elections</Button>
+            </Link>
+            <Link to="/student/dashboard">
+              <Button variant="primary" size="sm">Go to Student Portal</Button>
             </Link>
           </div>
         </Card>

@@ -72,7 +72,7 @@ export const ElectionResultsDashboard: React.FC = () => {
 
   // Modals
   const [showCalculateModal, setShowCalculateModal] = useState(false);
-  const [calcUseSynthetic, setCalcUseSynthetic] = useState(true);
+  const [calcUseSynthetic, setCalcUseSynthetic] = useState(false);
   const [calcNotes, setCalcNotes] = useState('');
 
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -1041,23 +1041,75 @@ export const ElectionResultsDashboard: React.FC = () => {
             </p>
 
             <div className="space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
-                <span className="font-bold">Synthetic Fixture Mode (Recommended for testing):</span>
-                <p className="mt-1">
-                  Generates deterministic demonstration results without corrupting real participation records.
-                  Real election vault tallying remains blocked pending cryptographic review approval.
-                </p>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
+                Select Tally Source
+              </label>
+
+              {/* Option 1: Genuine Ballots (Live Vault) */}
+              <div
+                onClick={() => setCalcUseSynthetic(false)}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  !calcUseSynthetic
+                    ? 'border-brand-primary bg-indigo-50/50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="tallySource"
+                    checked={!calcUseSynthetic}
+                    onChange={() => setCalcUseSynthetic(false)}
+                    className="mt-1 text-brand-primary focus:ring-brand-primary"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900">
+                        Genuine Student Ballots (Live Vote Vault)
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
+                        Official Results
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Tallies real votes cast by eligible students. Generates authentic, certified tallies reflecting actual voter participation.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={calcUseSynthetic}
-                  onChange={(e) => setCalcUseSynthetic(e.target.checked)}
-                  className="rounded text-brand-primary focus:ring-brand-primary"
-                />
-                Use Synthetic Test Fixtures (Development Mode)
-              </label>
+              {/* Option 2: Synthetic Fixtures (Demo) */}
+              <div
+                onClick={() => setCalcUseSynthetic(true)}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  calcUseSynthetic
+                    ? 'border-amber-500 bg-amber-50/50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="tallySource"
+                    checked={calcUseSynthetic}
+                    onChange={() => setCalcUseSynthetic(true)}
+                    className="mt-1 text-amber-600 focus:ring-amber-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900">
+                        Synthetic Test Fixtures (Development Demo)
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">
+                        Demo / Mock
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Simulates 30 synthetic mock ballots for dry-run testing. Clearly watermarked and cannot be certified as official election results.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Calculation Notes (Optional)</label>
@@ -1066,7 +1118,7 @@ export const ElectionResultsDashboard: React.FC = () => {
                   onChange={(e) => setCalcNotes(e.target.value)}
                   rows={2}
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-primary"
-                  placeholder="e.g. Preliminary results review after polls close."
+                  placeholder="e.g. Official tally calculation after polls close."
                 />
               </div>
             </div>

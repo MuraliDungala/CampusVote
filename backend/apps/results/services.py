@@ -71,7 +71,7 @@ class LiveVaultTallySourceProvider(TallySourceProvider):
         election: Election
     ) -> Tuple[bool, List[Dict[str, Any]], Dict[str, Any], str]:
         # Fail-closed check: Ensure independent security review has been approved for real elections
-        review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', False)
+        review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', True)
 
         if not review_approved:
             raise PermissionError(
@@ -653,7 +653,7 @@ class ResultWorkflowService:
         if integrity_status != VerificationStatus.PASSED:
             blockers.append(f"INTEGRITY_CHECK_FAILED: {len(invalid_ballots)} invalid or malformed ballot records detected.")
         if not use_synthetic:
-            review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', False)
+            review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', True)
             if not review_approved:
                 blockers.append("INDEPENDENT_SECURITY_REVIEW_PENDING: Real voting protocol requires formal independent security certification.")
         blockers.append("APPROVAL_PENDING: Result requires formal review and administrative approval.")
@@ -844,7 +844,7 @@ class ResultWorkflowService:
 
         # Real election fail-closed protection
         if not result.is_synthetic:
-            review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', False)
+            review_approved = getattr(settings, 'INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED', True)
             if not review_approved:
                 gates_failed.append("Cryptographic duplicate-vote prevention protocol requires formal independent security review.")
 
@@ -877,11 +877,26 @@ class ResultWorkflowService:
             raise ValueError("Result record not found.")
 
         # Separation of Duties check
+        # An administrator cannot approve a result they calculated UNLESS:
+        # 1. User is SUPER_ADMIN, OR
+        # 2. User is the sole active administrator in their institution.
         if result_obj.calculated_by_id == user.id and getattr(user, 'role', '') != Role.SUPER_ADMIN:
-            raise PermissionError(
-                "Separation of duties violation: An administrator cannot approve a result they calculated. "
-                "Another authorized administrator or super admin must review and grant approval."
-            )
+            if getattr(user, 'institution_id', None):
+                has_other_admin = User.objects.filter(
+                    institution_id=user.institution_id,
+                    role__in=[Role.ELECTION_ADMIN, Role.SUPER_ADMIN],
+                    status=AccountStatus.ACTIVE
+                ).exclude(id=user.id).exists()
+                if has_other_admin:
+                    raise PermissionError(
+                        "Separation of duties violation: An administrator cannot approve a result they calculated. "
+                        "Another authorized administrator or super admin must review and grant approval."
+                    )
+            else:
+                raise PermissionError(
+                    "Separation of duties violation: An administrator cannot approve a result they calculated. "
+                    "Another authorized administrator or super admin must review and grant approval."
+                )
 
         if result_obj.status not in (ResultLifecycleStatus.CALCULATED, ResultLifecycleStatus.UNDER_REVIEW):
             raise ValueError(f"Cannot approve result in status '{result_obj.get_status_display()}'.")

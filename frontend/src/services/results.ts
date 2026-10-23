@@ -67,7 +67,7 @@ export async function getElectionResults(electionId: string): Promise<ResultList
  */
 export async function calculateResults(
   electionId: string,
-  useSynthetic: boolean = true,
+  useSynthetic: boolean = false,
   notes: string = ''
 ): Promise<CalculateResultResponse> {
   return apiClient<CalculateResultResponse>(`/api/v1/admin/elections/${electionId}/results/calculate/`, {

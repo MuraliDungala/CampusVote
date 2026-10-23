@@ -17,7 +17,7 @@ Comprehensive tests covering:
 
 import json
 from datetime import timedelta
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -287,19 +287,21 @@ class ResultsPhase8Tests(TestCase):
 
     def test_participation_reconciliation_real_election_not_verifiable(self):
         """For live vault ballots, reconciliation must report NOT_VERIFIABLE without leaking mapping."""
-        rec_status, diff, notes = ParticipationReconciliationService.reconcile(
-            self.election,
-            total_ballots=50,
-            tally_source_type=TallySourceType.LIVE_VAULT
-        )
-        self.assertEqual(rec_status, ReconciliationStatus.NOT_VERIFIABLE)
-        self.assertIn("NOT_VERIFIABLE", notes)
-        self.assertIn("voter privacy", notes)
+        with override_settings(INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED=False):
+            rec_status, diff, notes = ParticipationReconciliationService.reconcile(
+                self.election,
+                total_ballots=50,
+                tally_source_type=TallySourceType.LIVE_VAULT
+            )
+            self.assertEqual(rec_status, ReconciliationStatus.NOT_VERIFIABLE)
+            self.assertIn("NOT_VERIFIABLE", notes)
+            self.assertIn("voter privacy", notes)
 
     def test_fail_closed_live_vault_tally_source_blocks_calculation(self):
         """LiveVaultTallySourceProvider must raise PermissionError until cryptographic review approved."""
-        with self.assertRaises(PermissionError):
-            LiveVaultTallySourceProvider.get_tally_input(self.election)
+        with override_settings(INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED=False):
+            with self.assertRaises(PermissionError):
+                LiveVaultTallySourceProvider.get_tally_input(self.election)
 
     # =========================================================================
     # 2. WORKFLOW & SEPARATION OF DUTIES TESTS

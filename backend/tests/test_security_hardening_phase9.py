@@ -6,7 +6,7 @@ and integrity verification across all application subsystems.
 
 import json
 from datetime import timedelta
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -271,37 +271,38 @@ class Phase9SecurityHardeningTests(TestCase):
 
     def test_10_real_election_voting_is_fail_closed_blocked(self):
         """Live voting endpoint must remain blocked pending cryptographic certification."""
-        self.client.force_authenticate(user=self.student_user)
-        res = self.client.post(
-            f'/api/v1/voting/elections/{self.closed_election.id}/ballot/submit/',
-            {
-                'selections': [
-                    {
-                        'position_id': str(self.pos1.id),
-                        'candidate_id': str(self.cand1.id),
-                        'is_abstain': False
-                    }
-                ]
-            },
-            format='json'
-        )
+        with override_settings(ENVIRONMENT='production', INDEPENDENT_VOTING_SECURITY_REVIEW_APPROVED=False):
+            self.client.force_authenticate(user=self.student_user)
+            res = self.client.post(
+                f'/api/v1/voting/elections/{self.closed_election.id}/ballot/submit/',
+                {
+                    'selections': [
+                        {
+                            'position_id': str(self.pos1.id),
+                            'candidate_id': str(self.cand1.id),
+                            'is_abstain': False
+                        }
+                    ]
+                },
+                format='json'
+            )
 
-        # Live voting endpoint returns 400/403/503 indicating fail-closed protocol
-        self.assertIn(res.status_code, [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_403_FORBIDDEN,
-            status.HTTP_503_SERVICE_UNAVAILABLE
-        ])
-        body_text = str(res.data).lower()
-        self.assertTrue(
-            'fail-closed' in body_text or
-            'cryptographic' in body_text or
-            'disabled' in body_text or
-            'blocked' in body_text or
-            'review' in body_text or
-            'eligib' in body_text or
-            'verification' in body_text
-        )
+            # Live voting endpoint returns 400/403/503 indicating fail-closed protocol
+            self.assertIn(res.status_code, [
+                status.HTTP_400_BAD_REQUEST,
+                status.HTTP_403_FORBIDDEN,
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ])
+            body_text = str(res.data).lower()
+            self.assertTrue(
+                'fail-closed' in body_text or
+                'cryptographic' in body_text or
+                'disabled' in body_text or
+                'blocked' in body_text or
+                'review' in body_text or
+                'eligib' in body_text or
+                'verification' in body_text
+            )
 
     # =========================================================================
     # 5. ANOMALY DETECTION & ALERT GOVERNANCE

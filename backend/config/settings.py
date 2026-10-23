@@ -224,6 +224,33 @@ for trusted_origin in ['https://*.onrender.com', 'https://*.vercel.app', 'https:
         CSRF_TRUSTED_ORIGINS.append(trusted_origin)
 
 # ------------------------------------------------------------------------------
+# CORS (Cross-Origin Resource Sharing) Settings
+# ------------------------------------------------------------------------------
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOWED_ORIGINS_RAW = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173,https://campus-vote-ug9e.vercel.app,https://campus-vote-topaz.vercel.app'
+)
+CORS_ALLOWED_ORIGINS = [orig.strip() for orig in CORS_ALLOWED_ORIGINS_RAW.split(',') if orig.strip()]
+for default_origin in [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://campus-vote-ug9e.vercel.app',
+    'https://campus-vote-topaz.vercel.app',
+]:
+    if default_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(default_origin)
+
+# Allow all Vercel and Render preview and production domains
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+    r"^https://.*\.onrender\.com$",
+]
+
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+
+# ------------------------------------------------------------------------------
 # Password validation
 # ------------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [

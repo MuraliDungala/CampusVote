@@ -58,6 +58,12 @@ export async function deactivateStudent(id: string, reason: string = ''): Promis
   });
 }
 
+export async function approveStudent(id: string): Promise<{ message: string; student: Student }> {
+  return apiClient<{ message: string; student: Student }>(`/api/v1/admin/students/${id}/approve/`, {
+    method: 'POST',
+  });
+}
+
 export async function previewRosterCsv(file: File): Promise<ImportSession> {
   const formData = new FormData();
   formData.append('file', file);

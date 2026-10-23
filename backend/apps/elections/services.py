@@ -76,6 +76,30 @@ class ElectionLifecycleService:
 
     @classmethod
     @transaction.atomic
+    def revert_to_draft(cls, election: Election, actor=None, request=None) -> Election:
+        if hasattr(election, 'voter_participations') and election.voter_participations.exists():
+            raise ValidationError(_("Cannot unpublish an election after votes have already been cast. You can close or cancel the election instead."))
+
+        prev_status = election.status
+        election.transition_to(ElectionStatus.DRAFT, actor=actor)
+        
+        log_audit_event(
+            action=AuditAction.ELECTION_UPDATED,
+            target_type='ELECTION',
+            target_id=str(election.id),
+            actor=actor,
+            request=request,
+            metadata={
+                'title': election.title,
+                'previous_status': prev_status,
+                'new_status': ElectionStatus.DRAFT,
+                'action': 'UNPUBLISHED_TO_DRAFT',
+            }
+        )
+        return election
+
+    @classmethod
+    @transaction.atomic
     def activate(cls, election: Election, actor=None, request=None) -> Election:
         prev_status = election.status
         election.transition_to(ElectionStatus.ACTIVE, actor=actor)

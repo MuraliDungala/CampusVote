@@ -25,7 +25,12 @@ from apps.verification.models import (
     VerificationChannel,
     mask_destination
 )
-from apps.verification.providers import get_delivery_provider
+from apps.verification.providers import (
+    get_delivery_provider,
+    EmailConfigurationError,
+    EmailDeliveryError,
+    is_email_configured
+)
 from apps.verification.qr_service import parse_and_validate_qr_payload, lookup_student_for_qr
 
 logger = logging.getLogger(__name__)
@@ -206,7 +211,25 @@ class VerificationService:
                 otp=otp_code,
                 student_name=student.full_name
             )
-        except Exception as exc:
+        except EmailConfigurationError as exc:
+            log_audit_event(
+                action=AuditAction.OTP_DELIVERY_FAILED,
+                target_type='VERIFICATION_SESSION',
+                target_id=str(session.id),
+                metadata={'college_id': normalized_id, 'destination_masked': masked_dest, 'reason': 'PROVIDER_NOT_CONFIGURED'},
+                request=request
+            )
+            session.state = VerificationState.FAILED
+            session.save(update_fields=['state', 'updated_at'])
+            return False, {
+                'code': 'DELIVERY_PROVIDER_NOT_CONFIGURED',
+                'channel': channel,
+                'destination_masked': masked_dest,
+            }, (
+                "Unable to deliver verification code. The institutional email delivery service is currently "
+                "not configured on the server. Please contact your college election administrator."
+            )
+        except (EmailDeliveryError, Exception) as exc:
             logger.exception("Verification delivery provider encountered an unhandled exception")
             delivery_ok = False
 
@@ -215,7 +238,7 @@ class VerificationService:
                 action=AuditAction.OTP_DELIVERY_FAILED,
                 target_type='VERIFICATION_SESSION',
                 target_id=str(session.id),
-                metadata={'college_id': normalized_id, 'destination_masked': masked_dest},
+                metadata={'college_id': normalized_id, 'destination_masked': masked_dest, 'reason': 'DELIVERY_FAILED'},
                 request=request
             )
             session.state = VerificationState.FAILED

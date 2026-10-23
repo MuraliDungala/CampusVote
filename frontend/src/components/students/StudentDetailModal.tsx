@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, UserCheck, Mail, BookOpen, Calendar, ShieldCheck, UserX } from 'lucide-react';
+import { X, UserCheck, Mail, BookOpen, Calendar, ShieldCheck, UserX, CheckCircle2 } from 'lucide-react';
 import { Student } from '../../types/student';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -11,6 +11,7 @@ export interface StudentDetailModalProps {
   onClose: () => void;
   onEdit: (student: Student) => void;
   onDeactivate: (student: Student) => void;
+  onApprove?: (student: Student) => void;
 }
 
 export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
@@ -19,6 +20,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onClose,
   onEdit,
   onDeactivate,
+  onApprove,
 }) => {
   if (!isOpen || !student) return null;
 
@@ -141,8 +143,22 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             <Button variant="outline" size="sm" onClick={onClose}>
               Close
             </Button>
+            {student.enrollment_status === 'PENDING' && onApprove && (
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+                onClick={() => {
+                  onClose();
+                  onApprove(student);
+                }}
+                leftIcon={<CheckCircle2 className="w-4 h-4" />}
+              >
+                Approve Enrollment
+              </Button>
+            )}
             <Button
-              variant="primary"
+              variant={student.enrollment_status === 'PENDING' ? 'outline' : 'primary'}
               size="sm"
               onClick={() => {
                 onClose();

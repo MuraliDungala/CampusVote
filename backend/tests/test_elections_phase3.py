@@ -599,3 +599,29 @@ class ElectionManagementTests(TestCase):
         titles = [e['title'] for e in response.data['results']]
         self.assertIn('My Election', titles)
         self.assertNotIn('Other Admin Election', titles)
+
+    def test_27_admin_can_add_candidate_directly(self):
+        """27. Election Administrator can directly add/nominate a participating student candidate to a position."""
+        election = Election.objects.create(
+            title='Executive Council Election',
+            start_time=self.now + timedelta(days=1),
+            end_time=self.now + timedelta(days=3),
+            status=ElectionStatus.DRAFT,
+            created_by=self.admin_user
+        )
+        pos = ElectionPosition.objects.create(election=election, title='President', maximum_candidates=5)
+
+        # Admin adds candidate directly
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(f'/api/v1/positions/{pos.id}/candidates/', {
+            'student_id': self.student1.college_id,
+            'manifesto': 'Dedicated leadership and student welfare advocacy.',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], CandidateStatus.APPROVED)
+        self.assertEqual(response.data['student_college_id'], self.student1.college_id)
+
+        # Verify candidate exists and is approved
+        cand = Candidate.objects.get(election_position=pos, student=self.student1)
+        self.assertEqual(cand.status, CandidateStatus.APPROVED)
+        self.assertEqual(cand.reviewed_by, self.admin_user)

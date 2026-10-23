@@ -47,3 +47,40 @@ class HealthCheckEndpointTests(APITestCase):
 
         self.assertEqual(data.get('status'), 'unhealthy')
         self.assertEqual(data['dependencies']['database']['status'], 'unhealthy')
+
+    def test_health_check_email_dependency_status(self):
+        """Test that email dependency is reported cleanly without credential leakage."""
+        url = reverse('api-health-check')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertIn('email', data['dependencies'])
+        email_dep = data['dependencies']['email']
+        self.assertIn('configured', email_dep)
+        self.assertIn('provider', email_dep)
+        self.assertIn('status', email_dep)
+
+        # Zero leakage check
+        email_str = str(email_dep).lower()
+        self.assertNotIn('password', email_str)
+        self.assertNotIn('smtp', email_str)
+        self.assertNotIn('user', email_str)
+
+    def test_is_email_configured_detects_missing_smtp(self):
+        """Verify is_email_configured detects unconfigured SMTP in production settings."""
+        from apps.verification.providers import is_email_configured
+        from django.test import override_settings
+
+        with override_settings(
+            DEBUG=False,
+            ALLOW_MOCK_DELIVERY_IN_TESTS=False,
+            EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+            EMAIL_HOST='localhost',
+            EMAIL_HOST_USER='',
+            VERIFICATION_DELIVERY_PROVIDER='email'
+        ):
+            configured, reason = is_email_configured()
+            self.assertFalse(configured)
+            self.assertIn('SMTP server not configured', reason)

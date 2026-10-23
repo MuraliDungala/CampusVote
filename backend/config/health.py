@@ -51,7 +51,11 @@ class HealthCheckView(APIView):
         except Exception:
             redis_status = "unavailable"
 
-        # 3. Overall Service Status Evaluation
+        # 3. Email Delivery Configuration Check
+        from apps.verification.providers import is_email_configured
+        email_configured, email_status_msg = is_email_configured()
+
+        # 4. Overall Service Status Evaluation
         # If the primary database is unavailable, or if Redis is required and unavailable, report unhealthy
         is_healthy = db_connected and (not redis_required or redis_status == "connected")
         http_status = status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
@@ -60,7 +64,7 @@ class HealthCheckView(APIView):
             "status": "healthy" if is_healthy else "unhealthy",
             "service": "campusvote-api",
             "version": os.getenv("API_VERSION", "v1"),
-            "environment": os.getenv("ENVIRONMENT", "development"),
+            "environment": os.getenv("ENVIRONMENT", "development" if settings.DEBUG else "production"),
             "timestamp": timezone.now().isoformat(),
             "dependencies": {
                 "database": {
@@ -70,6 +74,11 @@ class HealthCheckView(APIView):
                 "redis": {
                     "status": redis_status,
                     "required": redis_required
+                },
+                "email": {
+                    "configured": email_configured,
+                    "provider": getattr(settings, 'VERIFICATION_DELIVERY_PROVIDER', 'email'),
+                    "status": "configured" if email_configured else "unconfigured"
                 }
             }
         }

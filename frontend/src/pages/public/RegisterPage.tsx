@@ -312,7 +312,6 @@ export const RegisterPage: React.FC = () => {
                 <FormField label="Full Name" htmlFor="reg-fullname" required>
                   <Input
                     id="reg-fullname"
-                    placeholder="e.g. Maya Lin"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     leftIcon={<User className="w-4 h-4" />}
@@ -331,7 +330,6 @@ export const RegisterPage: React.FC = () => {
                   >
                     <Input
                       id="reg-college-name"
-                      placeholder="Enter your college or institution name"
                       value={collegeName}
                       onChange={(e) => setCollegeName(e.target.value)}
                       leftIcon={<Building2 className="w-4 h-4" />}
@@ -348,7 +346,6 @@ export const RegisterPage: React.FC = () => {
                   >
                     <Input
                       id="reg-college-id"
-                      placeholder="e.g. 23341A4234 or STU-2026-001"
                       value={collegeId}
                       onChange={(e) => setCollegeId(e.target.value.toUpperCase())}
                       leftIcon={<GraduationCap className="w-4 h-4" />}
@@ -369,7 +366,6 @@ export const RegisterPage: React.FC = () => {
                   <Input
                     id="reg-email"
                     type="email"
-                    placeholder="e.g. student@college.edu or 23341a4234@gmrit.edu.in"
                     value={email}
                     onChange={(e) => setEmail(e.target.value.toLowerCase())}
                     leftIcon={<Mail className="w-4 h-4" />}
@@ -427,7 +423,6 @@ export const RegisterPage: React.FC = () => {
                   >
                     <Input
                       id="reg-custom-dept"
-                      placeholder="e.g. Chemical Engineering, Biotechnology"
                       value={customDepartment}
                       onChange={(e) => setCustomDepartment(e.target.value)}
                       disabled={isLoading}
@@ -447,7 +442,6 @@ export const RegisterPage: React.FC = () => {
                     <Input
                       id="reg-password"
                       type="password"
-                      placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       leftIcon={<Lock className="w-4 h-4" />}
@@ -460,7 +454,6 @@ export const RegisterPage: React.FC = () => {
                     <Input
                       id="reg-confirm-password"
                       type="password"
-                      placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       leftIcon={<Lock className="w-4 h-4" />}

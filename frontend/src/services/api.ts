@@ -55,6 +55,95 @@ export async function fetchCsrfToken(): Promise<string | null> {
   return null;
 }
 
+export function extractApiErrorMessage(data: any, status: number): string {
+  if (typeof data === 'string') {
+    const lower = data.toLowerCase();
+    // Guard against HTML error pages from Django or proxies
+    if (lower.includes('<html') || lower.includes('<!doctype') || lower.includes('<body') || lower.includes('<head')) {
+      if (status === 404) {
+        return 'The requested API endpoint was not found on the server (HTTP 404).';
+      } else if (status === 500) {
+        return 'An internal server error occurred on the voting server (HTTP 500). Please try again later.';
+      } else if (status === 403) {
+        return 'Access denied or CSRF session verification failed (HTTP 403).';
+      } else if (status === 401) {
+        return 'Authentication required. Please sign in (HTTP 401).';
+      } else if (status >= 502 && status <= 504) {
+        return 'The campus voting service is temporarily unavailable. Please try again in a moment.';
+      } else {
+        return `Server returned an unexpected response (HTTP ${status}).`;
+      }
+    }
+    return data.trim() || `Request failed with status ${status}`;
+  }
+
+  if (typeof data === 'object' && data !== null) {
+    // 1. Inspect specific details or non_field_errors FIRST before generic summary strings
+    if (data.details) {
+      if (typeof data.details === 'string') {
+        return data.details;
+      }
+      if (typeof data.details === 'object' && data.details !== null) {
+        if (data.details.non_field_errors) {
+          const nf = data.details.non_field_errors;
+          return Array.isArray(nf) && nf.length > 0 ? nf[0] : String(nf);
+        }
+        const keys = Object.keys(data.details).filter((k) => k !== 'code');
+        if (keys.length > 0) {
+          const firstKey = keys[0];
+          const firstVal = data.details[firstKey];
+          if (firstKey === 'non_field_errors') {
+            return Array.isArray(firstVal) && firstVal.length > 0 ? firstVal[0] : String(firstVal);
+          }
+          if (Array.isArray(firstVal) && firstVal.length > 0) {
+            return `${firstKey.replace(/_/g, ' ')}: ${firstVal[0]}`;
+          } else if (typeof firstVal === 'string') {
+            return `${firstKey.replace(/_/g, ' ')}: ${firstVal}`;
+          }
+        }
+      }
+    }
+
+    // 2. Check top-level non_field_errors
+    if (data.non_field_errors) {
+      const nf = data.non_field_errors;
+      return Array.isArray(nf) && nf.length > 0 ? nf[0] : String(nf);
+    }
+
+    // 3. Check explicit human message
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+
+    // 4. Check explicit detail (standard DRF)
+    if (typeof data.detail === 'string' && data.detail.trim()) {
+      return data.detail;
+    }
+
+    // 5. Check error string (if not just a generic category while details exist)
+    if (typeof data.error === 'string' && data.error.trim()) {
+      return data.error;
+    }
+
+    // 6. Direct serializer field errors (e.g. { college_id: ["..."] })
+    const keys = Object.keys(data).filter((k) => !['status', 'code'].includes(k));
+    if (keys.length > 0) {
+      const firstKey = keys[0];
+      const firstVal = data[firstKey];
+      if (firstKey === 'non_field_errors') {
+        return Array.isArray(firstVal) && firstVal.length > 0 ? firstVal[0] : String(firstVal);
+      }
+      if (Array.isArray(firstVal) && firstVal.length > 0) {
+        return `${firstKey.replace(/_/g, ' ')}: ${firstVal[0]}`;
+      } else if (typeof firstVal === 'string') {
+        return `${firstKey.replace(/_/g, ' ')}: ${firstVal}`;
+      }
+    }
+  }
+
+  return `Request failed with status ${status}`;
+}
+
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { params, headers = {}, ...customConfig } = options;
 
@@ -109,61 +198,7 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
       if (response.status === 403) {
         cachedCsrfToken = null;
       }
-      let errorMessage = 'API request failed';
-
-      if (typeof data === 'string') {
-        const lower = data.toLowerCase();
-        // Guard against HTML error pages from Django or proxies
-        if (lower.includes('<html') || lower.includes('<!doctype') || lower.includes('<body') || lower.includes('<head')) {
-          if (response.status === 404) {
-            errorMessage = 'The requested API endpoint was not found on the server (HTTP 404).';
-          } else if (response.status === 500) {
-            errorMessage = 'An internal server error occurred on the voting server (HTTP 500). Please try again later.';
-          } else if (response.status === 403) {
-            errorMessage = 'Access denied or CSRF session verification failed (HTTP 403).';
-          } else if (response.status === 401) {
-            errorMessage = 'Authentication required. Please sign in (HTTP 401).';
-          } else if (response.status >= 502 && response.status <= 504) {
-            errorMessage = 'The campus voting service is temporarily unavailable. Please try again in a moment.';
-          } else {
-            errorMessage = `Server returned an unexpected response (HTTP ${response.status}).`;
-          }
-        } else {
-          errorMessage = data.trim() || `Request failed with status ${response.status}`;
-        }
-      } else if (typeof data === 'object' && data !== null) {
-        if (typeof data.message === 'string') {
-          errorMessage = data.message;
-        } else if (typeof data.error === 'string') {
-          errorMessage = data.error;
-        } else if (typeof data.detail === 'string') {
-          errorMessage = data.detail;
-        } else if (data.details && typeof data.details === 'string') {
-          errorMessage = data.details;
-        } else if (data.details && typeof data.details === 'object') {
-          const firstKey = Object.keys(data.details)[0];
-          const firstVal = data.details[firstKey];
-          if (Array.isArray(firstVal) && firstVal.length > 0) {
-            errorMessage = `${firstKey.replace(/_/g, ' ')}: ${firstVal[0]}`;
-          } else if (typeof firstVal === 'string') {
-            errorMessage = `${firstKey.replace(/_/g, ' ')}: ${firstVal}`;
-          } else {
-            errorMessage = 'Validation error occurred. Please review your input.';
-          }
-        } else {
-          const keys = Object.keys(data);
-          if (keys.length > 0) {
-            const firstKey = keys[0];
-            const firstVal = data[firstKey];
-            if (Array.isArray(firstVal) && firstVal.length > 0) {
-              errorMessage = `${firstKey.replace(/_/g, ' ')}: ${firstVal[0]}`;
-            } else if (typeof firstVal === 'string') {
-              errorMessage = firstVal;
-            }
-          }
-        }
-      }
-
+      const errorMessage = extractApiErrorMessage(data, response.status);
       throw new ApiError(errorMessage, response.status, data);
     }
 
@@ -172,6 +207,13 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     if (error instanceof ApiError) {
       throw error;
     }
-    throw new ApiError(error.message || 'Network connection error', 0, error);
+    const rawMsg = error?.message || '';
+    let userMsg = 'Network connection error. The voting server is currently unreachable. Please verify your connection or try again in a moment.';
+    if (rawMsg.includes('Failed to fetch') || rawMsg.includes('NetworkError') || rawMsg.includes('Load failed')) {
+      userMsg = 'Unable to connect to the campus voting server. The backend service may be starting up or temporarily unreachable. Please try again in a few moments.';
+    } else if (rawMsg) {
+      userMsg = rawMsg;
+    }
+    throw new ApiError(userMsg, 0, error);
   }
 }

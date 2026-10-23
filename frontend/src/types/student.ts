@@ -3,7 +3,7 @@
  * CampusVote Phase 2 Architecture.
  */
 
-export type EnrollmentStatus = 'ENROLLED' | 'ON_LEAVE' | 'SUSPENDED' | 'GRADUATED' | 'WITHDRAWN';
+export type EnrollmentStatus = 'ENROLLED' | 'PENDING' | 'ON_LEAVE' | 'SUSPENDED' | 'GRADUATED' | 'WITHDRAWN';
 
 export interface Student {
   id: string;

@@ -39,7 +39,7 @@ ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_ENV.split(',') if host.s
 RENDER_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_HOSTNAME and RENDER_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOSTNAME)
-if os.getenv('RENDER') and '.onrender.com' not in ALLOWED_HOSTS:
+if '.onrender.com' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('.onrender.com')
 
 # Maximum upload limits (10 MB to prevent unbounded resource exhaustion attacks)
@@ -219,11 +219,9 @@ CSRF_TRUSTED_ORIGINS_RAW = os.getenv(
     os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')
 )
 CSRF_TRUSTED_ORIGINS = [orig.strip() for orig in CSRF_TRUSTED_ORIGINS_RAW.split(',') if orig.strip()]
-if os.getenv('RENDER'):
-    if 'https://*.onrender.com' not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append('https://*.onrender.com')
-    if 'https://*.vercel.app' not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append('https://*.vercel.app')
+for trusted_origin in ['https://*.onrender.com', 'https://*.vercel.app', 'https://campus-vote-ug9e.vercel.app', 'https://campus-vote-topaz.vercel.app']:
+    if trusted_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(trusted_origin)
 
 # ------------------------------------------------------------------------------
 # Password validation
@@ -307,7 +305,15 @@ ENABLE_DEV_OTP_INSPECTION = DEBUG
 # CORS Configuration
 # ------------------------------------------------------------------------------
 CORS_ORIGINS_RAW = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')
-CORS_ALLOWED_ORIGINS = [orig.strip() for orig in CORS_ORIGINS_RAW.split(',') if orig.strip()]
+# Filter out any wildcard domains from CORS_ALLOWED_ORIGINS (wildcards belong in CORS_ALLOWED_ORIGIN_REGEXES)
+CORS_ALLOWED_ORIGINS = [
+    orig.strip() for orig in CORS_ORIGINS_RAW.split(',')
+    if orig.strip() and '*' not in orig
+]
+# Explicitly include deployed production Vercel frontend origins
+for vercel_origin in ['https://campus-vote-ug9e.vercel.app', 'https://campus-vote-topaz.vercel.app']:
+    if vercel_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(vercel_origin)
 CORS_ALLOW_CREDENTIALS = True
 
 # Permit all Vercel deployment preview and production domains

@@ -11,7 +11,8 @@ import {
   Plus,
   Trash2,
   Clock,
-  Building2
+  Building2,
+  Info
 } from 'lucide-react';
 import { Sidebar } from '../../components/layout/Sidebar';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -80,6 +81,7 @@ export const CreateElectionWizard: React.FC = () => {
   const [newPosMax, setNewPosMax] = useState(10);
 
   // Submission State
+  const [publishImmediately, setPublishImmediately] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -412,6 +414,17 @@ export const CreateElectionWizard: React.FC = () => {
                     </p>
                   </div>
 
+                  {/* Informational Guidance on Participating Students */}
+                  <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-navy-950 flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-navy-950 block mb-0.5">Participating Student Candidates</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">
+                        Configure your contested offices here. As soon as you finish creating the election, you can enter and nominate participating student candidates directly for each office using the <strong>Add Candidate</strong> button in the Election Management Console, or eligible students can file nominations online.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Existing list */}
                   <div className="space-y-2">
                     <label className="block font-medium text-slate-700">Configured Offices ({positions.length})</label>
@@ -496,7 +509,7 @@ export const CreateElectionWizard: React.FC = () => {
                   <div>
                     <h3 className="text-base font-bold text-navy-950">Step 4: Review & Create Election</h3>
                     <p className="text-slate-500">
-                      Verify all election parameters before saving to the database. The election will be created in Draft status.
+                      Verify all election parameters before saving. Elections are created in Draft mode so you can add candidates first.
                     </p>
                   </div>
 
@@ -531,6 +544,54 @@ export const CreateElectionWizard: React.FC = () => {
                       </ul>
                     </div>
                   </div>
+
+                  {/* Publication Mode Toggle Card */}
+                  <div className="p-4 rounded-xl border border-surface-border bg-white shadow-subtle space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <span className="font-bold text-navy-950 text-xs block">Election Public Visibility</span>
+                        <span className="text-[11px] text-slate-500">
+                          Control if students can see this election immediately or after you enter candidates.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="text-xs font-semibold text-slate-600">
+                          {publishImmediately ? 'Publish to Students' : 'Draft (Unpublished)'}
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={publishImmediately}
+                          onClick={() => setPublishImmediately(!publishImmediately)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-primary ${
+                            publishImmediately ? 'bg-amber-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              publishImmediately ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {!publishImmediately ? (
+                      <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-[11px] flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>
+                          <strong>Recommended:</strong> Kept in <strong>Draft (Unpublished)</strong>. Candidates have not been selected yet. You can add candidates in the management console before publishing.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>Warning:</strong> Publishing immediately will make this election visible in student portals before candidates are added.
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -562,24 +623,15 @@ export const CreateElectionWizard: React.FC = () => {
                 ) : (
                   <div className="flex items-center gap-3">
                     <Button
-                      variant="outline"
+                      variant={publishImmediately ? 'outline' : 'primary'}
                       size="sm"
-                      onClick={() => handleFinalSubmit(false)}
-                      isLoading={isSubmitting}
-                      disabled={isSubmitting}
-                    >
-                      Save as Draft
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleFinalSubmit(true)}
+                      onClick={() => handleFinalSubmit(publishImmediately)}
                       isLoading={isSubmitting}
                       disabled={isSubmitting}
                       leftIcon={<CheckCircle2 className="w-4 h-4" />}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className={publishImmediately ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-brand-primary hover:bg-brand-secondary text-white'}
                     >
-                      Publish & Schedule Election
+                      {publishImmediately ? 'Create & Publish Immediately' : 'Create Election (Save as Draft)'}
                     </Button>
                   </div>
                 )}

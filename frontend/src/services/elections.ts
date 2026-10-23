@@ -59,6 +59,12 @@ export async function scheduleElection(id: string): Promise<Election> {
   });
 }
 
+export async function unpublishElection(id: string): Promise<Election> {
+  return apiClient<Election>(`/api/v1/elections/${id}/unpublish/`, {
+    method: 'POST',
+  });
+}
+
 export async function activateElection(id: string): Promise<Election> {
   return apiClient<Election>(`/api/v1/elections/${id}/activate/`, {
     method: 'POST',
@@ -132,6 +138,20 @@ export async function getElectionCandidates(
 
 export async function getPositionCandidates(positionId: string): Promise<Candidate[]> {
   return apiClient<Candidate[]>(`/api/v1/positions/${positionId}/candidates/`);
+}
+
+export async function adminAddCandidate(
+  positionId: string,
+  data: {
+    student_id: string;
+    manifesto?: string;
+    profile_image?: string;
+  }
+): Promise<Candidate> {
+  return apiClient<Candidate>(`/api/v1/positions/${positionId}/candidates/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function submitNomination(

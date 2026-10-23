@@ -327,3 +327,32 @@ class StudentRosterAndEligibilityTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.json()['is_eligible'])
+
+    def test_admin_manual_approve_pending_student(self):
+        """Verify election admin can manually approve a student in PENDING enrollment status."""
+        from apps.students.models import EnrollmentStatus
+        pending_student = Student.objects.create(
+            college_id='STU-PENDING-001',
+            full_name='Pending Voter',
+            email='pending.voter@campusvote.edu',
+            department='Computer Science',
+            academic_year=1,
+            course='B.Tech CS',
+            enrollment_status=EnrollmentStatus.PENDING,
+            is_active=True
+        )
+
+        approve_url = reverse('students:student-approve', kwargs={'pk': pending_student.id})
+
+        # Unauthorized student cannot approve
+        self.client.force_login(self.student_user)
+        res_unauth = self.client.post(approve_url)
+        self.assertEqual(res_unauth.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Admin can approve
+        self.client.force_login(self.admin_user)
+        res_admin = self.client.post(approve_url)
+        self.assertEqual(res_admin.status_code, status.HTTP_200_OK)
+        pending_student.refresh_from_db()
+        self.assertEqual(pending_student.enrollment_status, EnrollmentStatus.ENROLLED)
+        self.assertTrue(pending_student.is_active)

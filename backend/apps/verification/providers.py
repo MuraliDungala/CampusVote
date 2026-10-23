@@ -14,6 +14,46 @@ from django.core.mail import send_mail
 logger = logging.getLogger(__name__)
 
 
+class VerificationDeliveryError(Exception):
+    """Base exception for verification delivery failures."""
+    pass
+
+
+class EmailConfigurationError(VerificationDeliveryError):
+    """Raised when institutional email delivery settings are missing or incomplete."""
+    pass
+
+
+class EmailDeliveryError(VerificationDeliveryError):
+    """Raised when the email provider fails or rejects delivery."""
+    pass
+
+
+def is_email_configured() -> tuple[bool, str]:
+    """
+    Safely checks whether the email backend has valid operational settings.
+    Never exposes passwords, tokens, or private credentials in the return message.
+    """
+    backend = getattr(settings, 'EMAIL_BACKEND', '')
+    if 'console' in backend or 'locmem' in backend or 'filebased' in backend:
+        return True, "Development console/memory email backend active."
+
+    # If mock provider explicitly allowed in dev/test
+    if getattr(settings, 'DEBUG', False) or getattr(settings, 'ALLOW_MOCK_DELIVERY_IN_TESTS', False):
+        if getattr(settings, 'VERIFICATION_DELIVERY_PROVIDER', '').lower() == 'mock':
+            return True, "Development mock delivery provider active."
+
+    host = getattr(settings, 'EMAIL_HOST', '').strip()
+    user = getattr(settings, 'EMAIL_HOST_USER', '').strip()
+
+    # If host is default localhost / empty and user is empty, SMTP is not configured
+    if not host or host in ('localhost', '127.0.0.1'):
+        if not user:
+            return False, "SMTP server not configured (EMAIL_HOST is unset or localhost without credentials)."
+
+    return True, "Production SMTP delivery configured."
+
+
 class BaseDeliveryProvider(ABC):
     """Abstract base class for identity verification OTP delivery channels."""
 
@@ -78,6 +118,15 @@ class EmailDeliveryProvider(BaseDeliveryProvider):
     """Production institutional email delivery provider."""
 
     def send_otp(self, destination: str, otp: str, student_name: str = '') -> bool:
+        configured, reason = is_email_configured()
+        if not configured:
+            logger.warning(
+                "Email OTP delivery blocked: %s Required environment variables: "
+                "EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL.",
+                reason
+            )
+            raise EmailConfigurationError(reason)
+
         subject = "CampusVote Verification Code"
         greeting = f"Hello {student_name}," if student_name else "Hello,"
         message = (
@@ -91,17 +140,22 @@ class EmailDeliveryProvider(BaseDeliveryProvider):
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@campusvote.local')
 
         try:
-            send_mail(
+            sent_count = send_mail(
                 subject=subject,
                 message=message,
                 from_email=from_email,
                 recipient_list=[destination],
                 fail_silently=False,
             )
+            if sent_count < 1:
+                logger.error("Email provider returned sent_count=0 for recipient.")
+                raise EmailDeliveryError("Email provider failed to accept message for delivery.")
             return True
+        except EmailConfigurationError:
+            raise
         except Exception as exc:
-            logger.error(f"Email OTP delivery failed to '{destination}': {exc}")
-            return False
+            logger.error("Email OTP delivery failed to recipient: %s", exc.__class__.__name__)
+            raise EmailDeliveryError(f"Email delivery provider encountered an error: {exc}")
 
 
 class SMSDeliveryProvider(BaseDeliveryProvider):

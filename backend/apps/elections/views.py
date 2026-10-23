@@ -298,6 +298,15 @@ class ElectionScheduleView(ElectionTransitionBaseView):
         return ElectionLifecycleService.schedule(election, actor=request.user, request=request)
 
 
+class ElectionUnpublishView(ElectionTransitionBaseView):
+    """
+    POST /api/v1/elections/{id}/unpublish/
+    Reverts an election back to DRAFT (unpublished), taking it offline from the student catalogue.
+    """
+    def execute_transition(self, election, request):
+        return ElectionLifecycleService.revert_to_draft(election, actor=request.user, request=request)
+
+
 class ElectionActivateView(ElectionTransitionBaseView):
     def execute_transition(self, election, request):
         return ElectionLifecycleService.activate(election, actor=request.user, request=request)
@@ -530,6 +539,135 @@ class PositionCandidateListView(APIView):
             serializer = CandidateAdminSerializer(qs, many=True)
 
         return Response(serializer.data)
+
+    def post(self, request, position_id):
+        """
+        Election Administrator enters / nominates a participating student directly into the election position.
+        """
+        user = request.user
+        if not user or not user.is_authenticated or getattr(user, 'role', None) not in (Role.ELECTION_ADMIN, Role.SUPER_ADMIN):
+            return Response(
+                {"error": "Authentication required. Only election administrators can add candidates directly."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        position = get_object_or_404(ElectionPosition, pk=position_id)
+        election = position.election
+
+        # Check election organizer / college authorization
+        if not check_election_organizer_permission(user, election):
+            return Response(
+                {"error": "Access denied. You do not have permission to configure candidates for this election."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if election.status in (ElectionStatus.CLOSED, ElectionStatus.ARCHIVED, ElectionStatus.CANCELLED):
+            return Response(
+                {"error": f"Cannot add candidates to an election with status '{election.status}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        student_raw = request.data.get('student_id') or request.data.get('college_id')
+        if not student_raw:
+            return Response(
+                {"error": "Student identifier ('student_id' or 'college_id') is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.students.models import Student, EnrollmentStatus
+        from django.utils import timezone
+
+        student = None
+        try:
+            student = Student.objects.get(id=student_raw)
+        except (Student.DoesNotExist, ValueError, ValidationError):
+            student = Student.objects.filter(college_id__iexact=str(student_raw).strip()).first()
+            if not student:
+                student = Student.objects.filter(email__iexact=str(student_raw).strip()).first()
+
+        if not student:
+            return Response(
+                {"error": f"No student record found matching '{student_raw}' in the campus registry."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if election.institution_id and student.institution_id and student.institution_id != election.institution_id:
+            return Response(
+                {"error": "Selected student does not belong to the institution hosting this election."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not student.is_active:
+            return Response(
+                {"error": f"Student {student.full_name} ({student.college_id}) is deactivated and cannot participate in elections."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # If student was PENDING, admin adding them into the election verifies/approves their standing
+        if student.enrollment_status == EnrollmentStatus.PENDING:
+            student.enrollment_status = EnrollmentStatus.ENROLLED
+            student.save(update_fields=['enrollment_status', 'updated_at'])
+
+        if Candidate.objects.filter(election_position=position, student=student).exists():
+            return Response(
+                {"error": f"Student {student.full_name} ({student.college_id}) is already registered as a candidate for '{position.title}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        approved_count = position.candidates.filter(status=CandidateStatus.APPROVED).count()
+        if approved_count >= position.maximum_candidates:
+            return Response(
+                {"error": f"Position '{position.title}' has reached its maximum candidate capacity of {position.maximum_candidates}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        manifesto = request.data.get('manifesto', '').strip() or f"Official nominated candidate for {position.title}."
+        profile_image = request.data.get('profile_image', '').strip()
+
+        # Evaluate candidate eligibility
+        is_eligible, reason, snapshot = CandidateNominationService.evaluate_candidate_eligibility(student, election)
+
+        candidate = Candidate.objects.create(
+            election_position=position,
+            student=student,
+            manifesto=manifesto,
+            profile_image=profile_image or None,
+            status=CandidateStatus.APPROVED,
+            submitted_at=timezone.now(),
+            reviewed_at=timezone.now(),
+            reviewed_by=user,
+            eligibility_snapshot=snapshot
+        )
+
+        log_audit_event(
+            action=AuditAction.NOMINATION_CREATED,
+            target_type='NOMINATION',
+            target_id=str(candidate.id),
+            actor=user,
+            request=request,
+            metadata={
+                'student_id': student.college_id,
+                'position': position.title,
+                'election_id': str(election.id),
+                'source': 'ADMIN_DIRECT_NOMINATION',
+            }
+        )
+        log_audit_event(
+            action=AuditAction.NOMINATION_APPROVED,
+            target_type='NOMINATION',
+            target_id=str(candidate.id),
+            actor=user,
+            request=request,
+            metadata={
+                'student_id': student.college_id,
+                'position': position.title,
+                'election_id': str(election.id),
+                'source': 'ADMIN_DIRECT_NOMINATION',
+            }
+        )
+
+        serializer = CandidateAdminSerializer(candidate)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class PositionNominationCreateView(APIView):

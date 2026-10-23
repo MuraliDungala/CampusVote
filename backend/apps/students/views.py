@@ -212,6 +212,55 @@ class StudentDeactivateView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class StudentApproveView(APIView):
+    """
+    POST /api/v1/admin/students/{id}/approve/
+    Administratively approves and verifies a student's enrollment standing.
+    Sets enrollment_status to ENROLLED, activates the record, and activates the linked user account.
+    """
+    permission_classes = [IsElectionAdmin]
+
+    def post(self, request, pk, *args, **kwargs):
+        student = get_object_or_404(Student, pk=pk)
+        if request.user.role == Role.ELECTION_ADMIN and not getattr(request.user, 'is_superuser', False):
+            if getattr(request.user, 'institution_id', None) and student.institution_id and student.institution_id != request.user.institution_id:
+                return Response(
+                    {"error": "Access denied. You cannot approve students from another college."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        from apps.students.models import EnrollmentStatus
+        from apps.accounts.models import AccountStatus
+
+        student.enrollment_status = EnrollmentStatus.ENROLLED
+        student.is_active = True
+        student.save(update_fields=['enrollment_status', 'is_active', 'updated_at'])
+
+        if student.user:
+            student.user.status = AccountStatus.ACTIVE
+            student.user.is_active = True
+            student.user.save(update_fields=['status', 'is_active'])
+
+        log_audit_event(
+            action=AuditAction.STUDENT_UPDATED,
+            target_type='STUDENT',
+            actor=request.user,
+            target_id=student.id,
+            metadata={
+                'college_id': student.college_id,
+                'action': 'MANUAL_ENROLLMENT_VERIFIED',
+                'new_status': EnrollmentStatus.ENROLLED,
+                'verified_by': request.user.username,
+            },
+            request=request
+        )
+
+        return Response({
+            "message": f"Student {student.full_name} ({student.college_id}) has been approved and verified.",
+            "student": StudentDetailSerializer(student).data
+        }, status=status.HTTP_200_OK)
+
+
 class StudentSummaryView(APIView):
     """
     GET /api/v1/admin/students/summary/

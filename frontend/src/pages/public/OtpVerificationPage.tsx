@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock,
   RotateCw,
-  Sparkles,
   Lock
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
@@ -30,7 +29,6 @@ export const OtpVerificationPage: React.FC = () => {
   const sessionId = stateData?.session_id || '';
   const collegeId = stateData?.college_id || '';
   const destinationMasked = stateData?.destination_masked || '';
-  const [devOtp, setDevOtp] = useState<string | undefined>(stateData?._dev_otp);
 
   const [otp, setOtp] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -109,9 +107,6 @@ export const OtpVerificationPage: React.FC = () => {
       setCooldownSeconds(res.resend_cooldown_seconds || 60);
       setExpirySeconds(res.expires_in_seconds || 300);
       setResendsRemaining(res.resends_remaining ?? 2);
-      if (res._dev_otp) {
-        setDevOtp(res._dev_otp);
-      }
       setSuccessMessage('A fresh verification code has been dispatched.');
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
@@ -152,30 +147,6 @@ export const OtpVerificationPage: React.FC = () => {
         >
           <ArrowLeft className="w-4 h-4" /> Change College ID
         </Link>
-
-        {/* Dev OTP inspection simulator */}
-        {devOtp && (
-          <div className="mb-4 p-3 rounded-xl border border-emerald-200 bg-emerald-50/80 text-navy-950">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                  Dev OTP Simulator:
-                </span>
-                <span className="font-mono text-sm font-extrabold text-emerald-950 tracking-widest">
-                  {devOtp}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOtp(devOtp)}
-                className="text-xs text-emerald-700 font-semibold hover:underline bg-white px-2 py-0.5 rounded border border-emerald-200 shadow-2xs"
-              >
-                Autofill
-              </button>
-            </div>
-          </div>
-        )}
 
         <Card className="shadow-elevated">
           <CardHeader className="text-center pb-3">

@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  CheckCircle2,
 } from 'lucide-react';
 import { Sidebar } from '../../components/layout/Sidebar';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -36,6 +37,7 @@ import {
   createStudent,
   updateStudent,
   deactivateStudent,
+  approveStudent,
 } from '../../services/students';
 import { StudentDetailModal } from '../../components/students/StudentDetailModal';
 import { StudentFormModal } from '../../components/students/StudentFormModal';
@@ -140,6 +142,17 @@ export const StudentListPage: React.FC = () => {
     setToastMessage(`Student record deactivated successfully.`);
     fetchStudents();
     fetchSummary();
+  };
+
+  const handleApproveStudent = async (student: Student) => {
+    try {
+      await approveStudent(student.id);
+      setToastMessage(`Student ${student.full_name} (${student.college_id}) approved and verified successfully.`);
+      fetchStudents();
+      fetchSummary();
+    } catch (err: any) {
+      setError(err.message || 'Failed to approve student enrollment.');
+    }
   };
 
   return (
@@ -447,6 +460,17 @@ export const StudentListPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {student.enrollment_status === 'PENDING' && (
+                              <button
+                                type="button"
+                                onClick={() => handleApproveStudent(student)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:text-white hover:bg-emerald-600 transition-colors bg-emerald-50 border border-emerald-200"
+                                title="Approve & Verify Student Enrollment"
+                                aria-label={`Approve ${student.full_name}`}
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -545,6 +569,7 @@ export const StudentListPage: React.FC = () => {
           setStudentToDeactivate(student);
           setIsDeactivateOpen(true);
         }}
+        onApprove={handleApproveStudent}
       />
 
       <StudentFormModal

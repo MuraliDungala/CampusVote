@@ -25,9 +25,9 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: ".onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        value: "http://localhost:5173,https://*.vercel.app"
+        value: "http://localhost:5173,https://campus-vote-ug9e.vercel.app,https://campus-vote-topaz.vercel.app"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://*.onrender.com,https://*.vercel.app"
+        value: "https://*.onrender.com,https://*.vercel.app,https://campus-vote-ug9e.vercel.app,https://campus-vote-topaz.vercel.app"
       - key: CHANNEL_LAYER_BACKEND
         value: "channels.layers.InMemoryChannelLayer"
       - key: MONITORING_PRIVACY_SUPPRESSION_THRESHOLD
@@ -36,6 +36,18 @@ services:
         value: "email"
       - key: DEFAULT_FROM_EMAIL
         value: "CampusVote Election Authority <noreply@campusvote.edu>"
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_USE_TLS
+        value: "True"
 
 databases:
   # ==============================================================================

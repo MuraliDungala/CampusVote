@@ -16,6 +16,9 @@ import {
   Activity,
   ShieldAlert,
   Award,
+  UserPlus,
+  Globe,
+  AlertCircle,
 } from 'lucide-react';
 import { Sidebar } from '../../components/layout/Sidebar';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -35,6 +38,7 @@ import {
 import {
   getElection,
   scheduleElection,
+  unpublishElection,
   activateElection,
   closeElection,
   publishResults,
@@ -49,6 +53,7 @@ import {
 } from '../../services/elections';
 import { PositionModal } from '../../components/elections/PositionModal';
 import { NominationReviewModal } from '../../components/elections/NominationReviewModal';
+import { AddCandidateModal } from '../../components/elections/AddCandidateModal';
 
 const STATUS_VARIANTS: Record<ElectionStatus, 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'> = {
   DRAFT: 'neutral',
@@ -79,6 +84,9 @@ export const AdminElectionDetailPage: React.FC = () => {
 
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+
+  const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
+  const [selectedPositionForCandidate, setSelectedPositionForCandidate] = useState<ElectionPosition | null>(null);
 
   // Lifecycle action confirmation dialogs
   const [confirmAction, setConfirmAction] = useState<{
@@ -118,6 +126,105 @@ export const AdminElectionDetailPage: React.FC = () => {
   useEffect(() => {
     loadElectionData();
   }, [loadElectionData]);
+
+  const canModifyElection = Boolean(election && !['CLOSED', 'ARCHIVED', 'CANCELLED', 'RESULTS_PUBLISHED'].includes(election.status));
+  const isPublished = Boolean(election && (election.status === 'SCHEDULED' || election.status === 'ACTIVE'));
+  const isDraft = Boolean(election && election.status === 'DRAFT');
+  const isTerminalStatus = Boolean(election && ['CLOSED', 'RESULTS_PUBLISHED', 'ARCHIVED', 'CANCELLED'].includes(election.status));
+  const approvedCandidates = candidates.filter((c) => c.status === 'APPROVED');
+  const totalCandidates = candidates.length;
+  const [isTogglingPublication, setIsTogglingPublication] = useState(false);
+
+  // Unified Publish Action with Candidate Readiness Checks
+  const executePublish = async () => {
+    if (!id) return;
+    try {
+      setIsTogglingPublication(true);
+      await scheduleElection(id);
+      setToastMessage('Election successfully published and scheduled for student participation.');
+      await loadElectionData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to publish election.');
+    } finally {
+      setIsTogglingPublication(false);
+    }
+  };
+
+  const handlePublish = (skipCandidateWarning: boolean = false) => {
+    if (!id || !election) return;
+
+    if (positions.length === 0) {
+      setError('Cannot publish election: At least one contested position must be configured first.');
+      return;
+    }
+
+    if (!skipCandidateWarning && totalCandidates === 0) {
+      setConfirmAction({
+        isOpen: true,
+        title: 'No Candidates Selected — Publish Anyway?',
+        description:
+          'Warning: There are currently 0 candidates registered for this election. If published now, students will see an empty ballot without any contestants. Are you sure you want to publish now, or would you like to select candidates first?',
+        action: async () => {
+          await executePublish();
+        },
+      });
+      return;
+    }
+
+    if (!skipCandidateWarning && totalCandidates > 0 && approvedCandidates.length === 0) {
+      setConfirmAction({
+        isOpen: true,
+        title: 'Approve Candidates Before Publishing?',
+        description: `There are ${totalCandidates} candidate nomination(s) registered, but none are approved yet. Only approved candidates appear on student ballots. Would you like to publish anyway?`,
+        action: async () => {
+          await executePublish();
+        },
+      });
+      return;
+    }
+
+    setConfirmAction({
+      isOpen: true,
+      title: 'Publish & Schedule Election for Students?',
+      description: `This election will be published to the student catalogue for ${
+        election.institution_name || 'your college'
+      } with ${approvedCandidates.length} approved candidate(s) across ${positions.length} position(s).`,
+      action: async () => {
+        await executePublish();
+      },
+    });
+  };
+
+  const handleUnpublish = () => {
+    if (!id || !election) return;
+    setConfirmAction({
+      isOpen: true,
+      title: 'Unpublish Election and Return to Draft?',
+      description:
+        'This will immediately remove the election from student visibility. Any scheduled voting will pause, and the election will return to Draft mode so you can add candidates or adjust offices.',
+      action: async () => {
+        try {
+          setIsTogglingPublication(true);
+          await unpublishElection(id);
+          setToastMessage('Election unpublished and returned to Draft mode. It is now hidden from students.');
+          await loadElectionData();
+        } catch (err: any) {
+          setError(err.message || 'Failed to unpublish election.');
+        } finally {
+          setIsTogglingPublication(false);
+        }
+      },
+    });
+  };
+
+  const handleTogglePublication = () => {
+    if (isTerminalStatus || isTogglingPublication) return;
+    if (isPublished) {
+      handleUnpublish();
+    } else {
+      handlePublish();
+    }
+  };
 
   // Position Actions
   const handleSavePosition = async (formData: PositionFormData) => {
@@ -160,17 +267,7 @@ export const AdminElectionDetailPage: React.FC = () => {
 
   // Lifecycle Transitions
   const handleSchedule = () => {
-    if (!id) return;
-    setConfirmAction({
-      isOpen: true,
-      title: 'Schedule Election for Future Start?',
-      description: 'The election will enter the Scheduled lifecycle state. Contested positions will be locked for editing.',
-      action: async () => {
-        await scheduleElection(id);
-        setToastMessage('Election successfully scheduled.');
-        loadElectionData();
-      },
-    });
+    handlePublish();
   };
 
   const handleActivate = () => {
@@ -365,6 +462,14 @@ export const AdminElectionDetailPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleUnpublish}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
+                    Unpublish to Draft
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleCancel}
                     className="text-red-600 border-red-200 hover:bg-red-50"
                   >
@@ -383,6 +488,14 @@ export const AdminElectionDetailPage: React.FC = () => {
                     leftIcon={<Clock className="w-4 h-4" />}
                   >
                     Close Voting
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUnpublish}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
+                    Unpublish to Draft
                   </Button>
                   <Button
                     variant="outline"
@@ -445,39 +558,133 @@ export const AdminElectionDetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* Election Public Visibility & Publishing Control Card */}
+          <Card className={`border shadow-subtle transition-all duration-200 ${
+            isPublished
+              ? 'border-emerald-300 bg-gradient-to-r from-emerald-50/70 via-white to-blue-50/40'
+              : 'border-surface-border bg-white'
+          }`}>
+            <CardContent className="p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-colors shadow-sm ${
+                      isPublished
+                        ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <Globe className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-bold text-navy-950">
+                        Election Public Visibility
+                      </h2>
+                      <Badge variant={isPublished ? 'success' : isDraft ? 'neutral' : 'info'} size="sm">
+                        {isPublished ? 'Published & Live to Students' : isDraft ? 'Unpublished (Draft)' : election.status_display}
+                      </Badge>
+                      {isDraft && totalCandidates === 0 && (
+                        <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Candidates Not Selected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                      {isPublished
+                        ? 'This election is published to the collegiate catalogue. Eligible students can view candidate profiles, read manifestos, and cast ballots when the voting window opens.'
+                        : isDraft
+                        ? 'This election is saved as an internal Draft and is completely invisible to students. Use this section to select candidates, configure offices, and verify eligibility before publishing.'
+                        : `This election cycle is currently in ${election.status_display} status.`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Control Toggle Switch */}
+                <div className="flex items-center gap-3 self-end sm:self-center shrink-0 bg-surface-subtle/80 px-3.5 py-2 rounded-xl border border-surface-border/80">
+                  <span className="text-xs font-semibold text-slate-700">
+                    {isPublished ? 'Published' : 'Unpublished'}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isPublished}
+                    aria-label="Toggle election public visibility"
+                    disabled={isTerminalStatus || isTogglingPublication}
+                    onClick={handleTogglePublication}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 ${
+                      isTerminalStatus
+                        ? 'opacity-40 cursor-not-allowed bg-slate-200'
+                        : isPublished
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : 'bg-slate-300 hover:bg-slate-400'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        isPublished ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Pre-Publication Readiness & Validation Checklist for DRAFT elections */}
           {election.status === 'DRAFT' && (() => {
             const hasPositions = positions.length > 0;
             const hasValidEndTime = new Date(election.end_time).getTime() > Date.now();
             const hasValidTimeWindow = new Date(election.start_time).getTime() < new Date(election.end_time).getTime();
+            const hasApprovedCandidates = approvedCandidates.length > 0;
             const isReadyToPublish = hasPositions && hasValidEndTime && hasValidTimeWindow;
 
             return (
-              <Card className={`border shadow-subtle ${isReadyToPublish ? 'border-emerald-300 bg-gradient-to-r from-emerald-50/70 via-white to-blue-50/50' : 'border-amber-300 bg-amber-50/40'}`}>
+              <Card className={`border shadow-subtle ${isReadyToPublish && hasApprovedCandidates ? 'border-emerald-300 bg-gradient-to-r from-emerald-50/70 via-white to-blue-50/50' : 'border-amber-300 bg-amber-50/40'}`}>
                 <CardContent className="p-5">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${isReadyToPublish ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                        <span className={`w-2.5 h-2.5 rounded-full ${isReadyToPublish && hasApprovedCandidates ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                         <h3 className="text-sm font-bold text-navy-950">
-                          {isReadyToPublish ? 'Pre-Publication Validation Passed — Ready to Schedule' : 'Pre-Publication Requirements Incomplete'}
+                          {isReadyToPublish && hasApprovedCandidates
+                            ? 'Pre-Publication Validation Passed — Ready to Publish'
+                            : !hasApprovedCandidates
+                            ? 'Candidate Selection Recommended Before Publishing'
+                            : 'Pre-Publication Requirements Incomplete'}
                         </h3>
-                        <Badge variant={isReadyToPublish ? 'success' : 'warning'} size="sm">
-                          {isReadyToPublish ? 'Publication Ready' : 'Draft Incomplete'}
+                        <Badge variant={isReadyToPublish && hasApprovedCandidates ? 'success' : 'warning'} size="sm">
+                          {isReadyToPublish && hasApprovedCandidates ? 'Ready to Publish' : !hasApprovedCandidates ? 'Candidates Needed' : 'Draft Incomplete'}
                         </Badge>
                       </div>
                       <p className="text-xs text-slate-600 max-w-2xl">
-                        {isReadyToPublish
-                          ? `All institutional governance checks passed. Scheduling this election will publish it to the student catalogue for ${election.institution_name || 'your college'}.`
+                        {isReadyToPublish && hasApprovedCandidates
+                          ? `All institutional governance checks passed and candidates are enrolled. You can turn on the visibility toggle to publish this election to students.`
+                          : !hasApprovedCandidates
+                          ? 'Notice: No approved candidates registered yet. Students will see an empty ballot if published now. Select and approve candidates below first.'
                           : 'This election is currently saved as an internal DRAFT and is invisible to students. Complete the requirements below to publish and schedule it.'}
                       </p>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
                         <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${hasPositions ? 'border-emerald-200 bg-emerald-50/60 text-emerald-900' : 'border-amber-200 bg-white text-amber-900'}`}>
                           <CheckCircle2 className={`w-4 h-4 shrink-0 ${hasPositions ? 'text-emerald-600' : 'text-slate-300'}`} />
                           <div>
                             <span className="font-semibold block">Contested Offices</span>
-                            <span className="text-[11px] text-slate-500">{positions.length} configured {hasPositions ? '(Requirement met)' : '(Requires >= 1)'}</span>
+                            <span className="text-[11px] text-slate-500">{positions.length} configured {hasPositions ? '(Met)' : '(>= 1)'}</span>
+                          </div>
+                        </div>
+
+                        <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${hasApprovedCandidates ? 'border-emerald-200 bg-emerald-50/60 text-emerald-900' : totalCandidates > 0 ? 'border-amber-200 bg-amber-50/80 text-amber-900' : 'border-amber-200 bg-white text-amber-900'}`}>
+                          <Users className={`w-4 h-4 shrink-0 ${hasApprovedCandidates ? 'text-emerald-600' : 'text-amber-500'}`} />
+                          <div>
+                            <span className="font-semibold block">Candidates</span>
+                            <span className="text-[11px] text-slate-500">
+                              {hasApprovedCandidates
+                                ? `${approvedCandidates.length} approved`
+                                : totalCandidates > 0
+                                ? `${totalCandidates} pending review`
+                                : '0 selected (Pending)'}
+                            </span>
                           </div>
                         </div>
 
@@ -485,7 +692,7 @@ export const AdminElectionDetailPage: React.FC = () => {
                           <CheckCircle2 className={`w-4 h-4 shrink-0 ${hasValidEndTime ? 'text-emerald-600' : 'text-slate-300'}`} />
                           <div>
                             <span className="font-semibold block">Voting Schedule</span>
-                            <span className="text-[11px] text-slate-500">{hasValidEndTime ? 'End time is in future' : 'End time is in the past'}</span>
+                            <span className="text-[11px] text-slate-500">{hasValidEndTime ? 'Schedule valid' : 'End time past'}</span>
                           </div>
                         </div>
 
@@ -493,7 +700,7 @@ export const AdminElectionDetailPage: React.FC = () => {
                           <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
                           <div>
                             <span className="font-semibold block">College Isolation</span>
-                            <span className="text-[11px] text-slate-500">{election.institution_name || 'Institution Bound'}</span>
+                            <span className="text-[11px] text-slate-500">{election.institution_name || 'Bound'}</span>
                           </div>
                         </div>
                       </div>
@@ -503,13 +710,27 @@ export const AdminElectionDetailPage: React.FC = () => {
                       <Button
                         variant="primary"
                         size="sm"
-                        disabled={!isReadyToPublish}
-                        onClick={handleSchedule}
-                        leftIcon={<Calendar className="w-4 h-4" />}
-                        className={isReadyToPublish ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' : ''}
+                        disabled={!hasPositions || isTogglingPublication}
+                        onClick={handleTogglePublication}
+                        leftIcon={<Globe className="w-4 h-4" />}
+                        className={isReadyToPublish && hasApprovedCandidates ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' : 'bg-slate-700 hover:bg-slate-800 text-white'}
                       >
-                        Publish &amp; Schedule Election
+                        Publish Election to Students
                       </Button>
+                      {totalCandidates === 0 && positions.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPositionForCandidate(positions[0]);
+                            setIsAddCandidateModalOpen(true);
+                          }}
+                          leftIcon={<UserPlus className="w-4 h-4 text-purple-600" />}
+                          className="text-xs border-purple-200 bg-purple-50/50 hover:bg-purple-100 text-purple-900 font-semibold"
+                        >
+                          + Select Candidate
+                        </Button>
+                      )}
                       {!hasPositions && (
                         <Button
                           variant="outline"
@@ -668,11 +889,27 @@ export const AdminElectionDetailPage: React.FC = () => {
                           </p>
                         </div>
 
-                        <div className="pt-3 border-t border-surface-border/60 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500">Approved Candidates:</span>
-                          <span className="font-bold text-navy-950">
-                            {pos.approved_candidates_count} / {pos.maximum_candidates} max
-                          </span>
+                        <div className="pt-3 border-t border-surface-border/60 flex items-center justify-between text-[11px] gap-2">
+                          <div>
+                            <span className="text-slate-500">Approved Candidates: </span>
+                            <span className="font-bold text-navy-950">
+                              {pos.approved_candidates_count} / {pos.maximum_candidates} max
+                            </span>
+                          </div>
+                          {canModifyElection && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-[11px] h-7 px-2.5 py-0 text-brand-primary border-brand-primary/30 hover:bg-blue-50"
+                              onClick={() => {
+                                setSelectedPositionForCandidate(pos);
+                                setIsAddCandidateModalOpen(true);
+                              }}
+                              leftIcon={<UserPlus className="w-3.5 h-3.5" />}
+                            >
+                              Add Candidate
+                            </Button>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -693,22 +930,38 @@ export const AdminElectionDetailPage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className="text-slate-500 font-medium mr-1">Filter:</span>
-                  {['ALL', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setCandidateStatusFilter(st)}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                        candidateStatusFilter === st
-                          ? 'bg-navy-950 text-white'
-                          : 'bg-surface-subtle text-slate-600 hover:bg-slate-200'
-                      }`}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-slate-500 font-medium mr-1">Filter:</span>
+                    {['ALL', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setCandidateStatusFilter(st)}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                          candidateStatusFilter === st
+                            ? 'bg-navy-950 text-white'
+                            : 'bg-surface-subtle text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+
+                  {canModifyElection && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedPositionForCandidate(null);
+                        setIsAddCandidateModalOpen(true);
+                      }}
+                      leftIcon={<UserPlus className="w-3.5 h-3.5" />}
                     >
-                      {st}
-                    </button>
-                  ))}
+                      Add Candidate
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -819,6 +1072,21 @@ export const AdminElectionDetailPage: React.FC = () => {
         candidate={selectedCandidate}
         onApprove={handleApproveCandidate}
         onReject={handleRejectCandidate}
+      />
+
+      {/* Add Candidate Modal */}
+      <AddCandidateModal
+        isOpen={isAddCandidateModalOpen}
+        onClose={() => {
+          setIsAddCandidateModalOpen(false);
+          setSelectedPositionForCandidate(null);
+        }}
+        positions={positions}
+        selectedPosition={selectedPositionForCandidate}
+        onCandidateAdded={(newCand) => {
+          setToastMessage(`Candidate ${newCand.student_name} (${newCand.student_college_id}) registered for ${newCand.position_title} successfully.`);
+          loadElectionData();
+        }}
       />
 
       {/* Confirmation Dialog */}

@@ -2,12 +2,12 @@
  * Authentication service functions.
  */
 
-import { apiClient } from './api';
+import { apiClient, fetchCsrfToken as getCsrfToken } from './api';
 import { UserSummary, LoginCredentials, LoginResponse } from '../types/auth';
 
 export async function fetchCsrfToken(): Promise<string> {
-  const data = await apiClient<{ csrfToken: string }>('/api/v1/auth/csrf/');
-  return data.csrfToken;
+  const token = await getCsrfToken();
+  return token || '';
 }
 
 export interface StudentRegistrationData {
@@ -65,7 +65,7 @@ export interface InstitutionItem {
 }
 
 export async function registerCollegeAdmin(data: CollegeAdminRegistrationData): Promise<CollegeAdminRegistrationResponse> {
-  await fetchCsrfToken();
+  await getCsrfToken();
   return apiClient<CollegeAdminRegistrationResponse>('/api/v1/auth/college-admin/register/', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -77,7 +77,7 @@ export async function fetchInstitutions(): Promise<InstitutionItem[]> {
 }
 
 export async function registerStudent(data: StudentRegistrationData): Promise<StudentRegistrationResponse> {
-  await fetchCsrfToken();
+  await getCsrfToken();
   try {
     return await apiClient<StudentRegistrationResponse>('/api/v1/auth/register/', {
       method: 'POST',
@@ -96,9 +96,7 @@ export async function registerStudent(data: StudentRegistrationData): Promise<St
 }
 
 export async function loginUser(credentials: LoginCredentials): Promise<LoginResponse> {
-  // Ensure a CSRF token cookie is present prior to logging in
-  await fetchCsrfToken();
-
+  await getCsrfToken();
   return apiClient<LoginResponse>('/api/v1/auth/login/', {
     method: 'POST',
     body: JSON.stringify(credentials),

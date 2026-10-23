@@ -4,15 +4,11 @@ import {
   ShieldCheck,
   KeyRound,
   ArrowLeft,
-  Info,
   AlertCircle,
-  Sparkles,
   User,
   GraduationCap,
   Building2,
-  ChevronRight,
   UserPlus,
-  Barcode
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -20,31 +16,32 @@ import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/ui/FormField';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types/auth';
-import { startCollegeIdVerification } from '../../services/verification';
 
 export const LoginPage: React.FC = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const initialMode =
-    (location.state as any)?.mode ||
-    (searchParams.get('tab') === 'admin' ||
+    (location.state as any)?.mode === 'STAFF_PASSWORD' ||
+    searchParams.get('tab') === 'admin' ||
     searchParams.get('role') === 'admin' ||
     searchParams.get('mode') === 'admin'
       ? 'STAFF_PASSWORD'
-      : 'STUDENT_ID');
+      : 'STUDENT_PASSWORD';
+
   const initialIdentifier = (location.state as any)?.identifier || searchParams.get('identifier') || '';
 
-  // Login mode: 'STUDENT_ID' or 'STAFF_PASSWORD'
-  const [loginMode, setLoginMode] = useState<'STUDENT_ID' | 'STAFF_PASSWORD'>(initialMode);
+  // Login mode: 'STUDENT_PASSWORD' or 'STAFF_PASSWORD'
+  const [loginMode, setLoginMode] = useState<'STUDENT_PASSWORD' | 'STAFF_PASSWORD'>(initialMode);
 
-  // Student ID mode state
-  const [collegeId, setCollegeId] = useState('');
-  const [isStartingVerification, setIsStartingVerification] = useState(false);
+  // Student mode credentials
+  const [studentIdentifier, setStudentIdentifier] = useState(initialIdentifier);
+  const [studentPassword, setStudentPassword] = useState('');
+  const [isStudentSubmitting, setIsStudentSubmitting] = useState(false);
   const [isUnregistered, setIsUnregistered] = useState(false);
 
-  // Staff Password mode state
-  const [identifier, setIdentifier] = useState(initialIdentifier);
-  const [password, setPassword] = useState('');
+  // Staff mode credentials
+  const [staffIdentifier, setStaffIdentifier] = useState(initialIdentifier);
+  const [staffPassword, setStaffPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const { user, isAuthenticated, logout, login, isLoading, error: authError, clearError } = useAuth();
@@ -54,11 +51,14 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     const stateMode = (location.state as any)?.mode;
     const stateId = (location.state as any)?.identifier;
-    if (stateMode === 'STAFF_PASSWORD' || stateMode === 'STUDENT_ID') {
-      setLoginMode(stateMode);
+    if (stateMode === 'STAFF_PASSWORD') {
+      setLoginMode('STAFF_PASSWORD');
+    } else if (stateMode === 'STUDENT_ID' || stateMode === 'STUDENT_PASSWORD') {
+      setLoginMode('STUDENT_PASSWORD');
     }
     if (stateId) {
-      setIdentifier(stateId);
+      setStudentIdentifier(stateId);
+      setStaffIdentifier(stateId);
     }
   }, [location.state]);
 
@@ -90,60 +90,29 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // Handle Student Smart ID Verification start
-  const handleStudentVerificationSubmit = async (e: React.FormEvent) => {
+  // Handle Student Email/College ID + Password login
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
     clearError();
     setIsUnregistered(false);
 
-    const targetId = collegeId.trim();
+    const targetId = studentIdentifier.trim();
     if (!targetId) {
-      setFormError('Please enter your institutional College ID or email address.');
+      setFormError('Please enter your registered Email address or College ID.');
+      return;
+    }
+    if (!studentPassword) {
+      setFormError('Please enter your student password.');
       return;
     }
 
-    if (isStartingVerification) return;
-
-    setIsStartingVerification(true);
+    setIsStudentSubmitting(true);
     try {
-      const response = await startCollegeIdVerification({
-        college_id: targetId,
-        channel: 'EMAIL',
-      });
-
-      // Navigate to OTP challenge page with session state
-      navigate('/login/verify', {
-        state: response,
-      });
+      const loggedUser = await login({ identifier: targetId, password: studentPassword });
+      redirectAfterLogin(loggedUser.role);
     } catch (err: any) {
-      const code = err?.details?.details?.code || err?.details?.code;
-      if (code === 'ADMIN_ACCOUNT_DETECTED') {
-        const detectedUsername = err?.details?.details?.identifier || err?.details?.identifier || targetId;
-        setLoginMode('STAFF_PASSWORD');
-        setIdentifier(detectedUsername);
-        setFormError(
-          err?.details?.error ||
-          err?.message ||
-          'College Administrator account detected. Please enter your administrator password to sign in.'
-        );
-        return;
-      }
-
-      if (code === 'DELIVERY_PROVIDER_UNAVAILABLE') {
-        setFormError(
-          err?.details?.error ||
-          'Email delivery is currently not configured or unreachable on the server. Please contact your college election administrator.'
-        );
-        return;
-      }
-
-      if (err?.status === 503 || err?.status === 500) {
-        setFormError('The verification service is temporarily unavailable. Please try again shortly.');
-        return;
-      }
-
-      const msg = err?.details?.error || err?.message || 'Verification initiation failed. Please check your College ID or email.';
+      const msg = err?.message || 'Login failed. Please check your credentials.';
       const cleanMsg = typeof msg === 'string' && (msg.includes('<html') || msg.includes('<!doctype'))
         ? 'A server communication error occurred. Please try again shortly.'
         : msg;
@@ -152,12 +121,12 @@ export const LoginPage: React.FC = () => {
       if (
         cleanMsg.toLowerCase().includes('not found') ||
         cleanMsg.toLowerCase().includes('register') ||
-        code === 'STUDENT_NOT_FOUND'
+        cleanMsg.toLowerCase().includes('does not exist')
       ) {
         setIsUnregistered(true);
       }
     } finally {
-      setIsStartingVerification(false);
+      setIsStudentSubmitting(false);
     }
   };
 
@@ -167,40 +136,22 @@ export const LoginPage: React.FC = () => {
     setFormError(null);
     clearError();
 
-    if (!identifier.trim()) {
+    if (!staffIdentifier.trim()) {
       setFormError('Please enter your Username or Email.');
       return;
     }
-    if (!password) {
-      setFormError('Please enter your password.');
+    if (!staffPassword) {
+      setFormError('Please enter your administrator password.');
       return;
     }
 
     try {
-      const loggedUser = await login({ identifier: identifier.trim(), password });
+      const loggedUser = await login({ identifier: staffIdentifier.trim(), password: staffPassword });
       redirectAfterLogin(loggedUser.role);
-    } catch {
-      // Error handled by AuthContext
+    } catch (err: any) {
+      const msg = err?.message || 'Login failed. Please check your credentials.';
+      setFormError(msg);
     }
-  };
-
-  // Synthetic account quick-switch helper for local development
-  const handleQuickLogin = async (demoId: string, demoPass: string) => {
-    setIdentifier(demoId);
-    setPassword(demoPass);
-    setFormError(null);
-    clearError();
-    try {
-      const loggedUser = await login({ identifier: demoId, password: demoPass });
-      redirectAfterLogin(loggedUser.role);
-    } catch {
-      // Handled
-    }
-  };
-
-  const handleQuickStudentId = (id: string) => {
-    setCollegeId(id);
-    setFormError(null);
   };
 
   return (
@@ -253,24 +204,6 @@ export const LoginPage: React.FC = () => {
           </div>
         )}
 
-        {/* Smart ID Verification Banner */}
-        <div className="mb-6 p-4 rounded-xl border border-blue-200 bg-blue-50/70 text-navy-950">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-brand-primary shrink-0 mt-0.5" />
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-brand-primary">
-                  Smart ID-Based Authentication
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Students authenticate using institutional College ID with multi-factor OTP challenge and QR scanning.
-                Staff and administrators sign in using secure role credentials.
-              </p>
-            </div>
-          </div>
-        </div>
-
         <Card className="shadow-elevated">
           <CardHeader className="text-center pb-4">
             <div className="w-12 h-12 rounded-2xl bg-navy-900 text-white flex items-center justify-center mx-auto mb-3 shadow-sm">
@@ -278,7 +211,7 @@ export const LoginPage: React.FC = () => {
             </div>
             <CardTitle className="text-xl">Campus Portal Access</CardTitle>
             <CardDescription className="text-xs">
-              Select your portal access method to proceed.
+              Sign in with your registered institutional credentials to proceed.
             </CardDescription>
 
             {/* Mode Switcher Tabs */}
@@ -286,12 +219,12 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setLoginMode('STUDENT_ID');
+                  setLoginMode('STUDENT_PASSWORD');
                   setFormError(null);
                   clearError();
                 }}
                 className={`py-2 px-3 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                  loginMode === 'STUDENT_ID'
+                  loginMode === 'STUDENT_PASSWORD'
                     ? 'bg-white text-navy-950 shadow-xs'
                     : 'text-slate-600 hover:text-navy-950'
                 }`}
@@ -344,49 +277,65 @@ export const LoginPage: React.FC = () => {
                       to="/register"
                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors shadow-xs"
                     >
-                      <UserPlus className="w-3.5 h-3.5" /> Register Student ID
+                      <UserPlus className="w-3.5 h-3.5" /> Register Student Account
                     </Link>
                   </div>
                 )}
               </div>
             )}
 
-            {/* TAB 1: Student Smart ID & OTP */}
-            {loginMode === 'STUDENT_ID' && (
+            {/* TAB 1: Student Login with Email/College ID & Password */}
+            {loginMode === 'STUDENT_PASSWORD' && (
               <div className="space-y-4">
-                <form onSubmit={handleStudentVerificationSubmit} className="space-y-4">
+                <form onSubmit={handleStudentSubmit} className="space-y-4">
                   <FormField
-                    label="Institutional College ID or Email"
-                    htmlFor="student-college-id"
+                    label="Institutional Email or College ID"
+                    htmlFor="student-identifier"
                     required
-                    helperText="Enter your official student roll number or institutional email."
+                    helperText="Enter the official email or roll number registered with your college."
                   >
                     <Input
-                      id="student-college-id"
-                      placeholder="e.g. STU-2026-001 or 23341A4234@GMRIT.EDU.IN"
-                      value={collegeId}
-                      onChange={(e) => setCollegeId(e.target.value)}
+                      id="student-identifier"
+                      value={studentIdentifier}
+                      onChange={(e) => setStudentIdentifier(e.target.value)}
                       leftIcon={<User className="w-4 h-4" />}
                       autoComplete="username"
-                      disabled={isStartingVerification}
-                      className="font-mono"
+                      disabled={isStudentSubmitting}
+                      className="font-mono text-xs"
+                    />
+                  </FormField>
+
+                  <FormField
+                    label="Password"
+                    htmlFor="student-password"
+                    required
+                    helperText="Enter the password created during your registration."
+                  >
+                    <Input
+                      id="student-password"
+                      type="password"
+                      value={studentPassword}
+                      onChange={(e) => setStudentPassword(e.target.value)}
+                      leftIcon={<KeyRound className="w-4 h-4" />}
+                      autoComplete="current-password"
+                      disabled={isStudentSubmitting}
                     />
                   </FormField>
 
                   <Button
                     type="submit"
                     variant="primary"
-                    className="w-full"
+                    className="w-full mt-2"
                     size="md"
-                    isLoading={isStartingVerification}
-                    disabled={!collegeId.trim() || isStartingVerification}
+                    isLoading={isStudentSubmitting}
+                    disabled={!studentIdentifier.trim() || !studentPassword || isStudentSubmitting}
                   >
-                    Send Verification Code <ChevronRight className="w-4 h-4 ml-1" />
+                    Sign In as Student Voter
                   </Button>
                 </form>
 
                 {/* Direct Link to Registration */}
-                <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/50 flex items-center justify-between text-xs">
+                <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/50 flex items-center justify-between text-xs mt-4">
                   <div>
                     <span className="font-semibold text-navy-950 block">New Student Voter?</span>
                     <span className="text-[11px] text-slate-500">Register with your institutional details</span>
@@ -398,58 +347,6 @@ export const LoginPage: React.FC = () => {
                     <UserPlus className="w-3.5 h-3.5" /> Register
                   </Link>
                 </div>
-
-                <div className="relative flex items-center justify-center">
-                  <div className="border-t border-slate-200 w-full" />
-                  <span className="bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Or Scan ID Badge
-                  </span>
-                </div>
-
-                {/* QR and Barcode Scanner Direct Link */}
-                <Link to="/login/qr">
-                  <button
-                    type="button"
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-200 flex items-center justify-between text-left transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-brand-primary shadow-2xs">
-                        <Barcode className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-navy-950">Scan Student ID QR Code / Barcode</div>
-                        <div className="text-[11px] text-slate-500">Universal scanner for 1D barcodes and QR cards</div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </button>
-                </Link>
-
-                {/* Quick Student ID triggers for development testing */}
-                <div className="pt-3 border-t border-surface-border">
-                  <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
-                    <span>Synthetic Student IDs (Testing)</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStudentId('STU-2026-001')}
-                      className="p-2 rounded-lg border border-surface-border bg-surface-subtle hover:bg-blue-50 text-left transition-colors"
-                    >
-                      <div className="font-bold text-navy-950 text-[11px]">STU-2026-001</div>
-                      <div className="text-[10px] text-slate-500">Alex Rivera (CS Y3)</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStudentId('STU-2026-002')}
-                      className="p-2 rounded-lg border border-surface-border bg-surface-subtle hover:bg-blue-50 text-left transition-colors"
-                    >
-                      <div className="font-bold text-navy-950 text-[11px]">STU-2026-002</div>
-                      <div className="text-[10px] text-slate-500">Priya Sharma (EE Y2)</div>
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -460,9 +357,8 @@ export const LoginPage: React.FC = () => {
                   <FormField label="Username or Email" htmlFor="staff-identifier" required>
                     <Input
                       id="staff-identifier"
-                      placeholder="e.g. admin_demo"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
+                      value={staffIdentifier}
+                      onChange={(e) => setStaffIdentifier(e.target.value)}
                       leftIcon={<User className="w-4 h-4" />}
                       autoComplete="username"
                       disabled={isLoading}
@@ -473,9 +369,8 @@ export const LoginPage: React.FC = () => {
                     <Input
                       id="staff-password"
                       type="password"
-                      placeholder="Enter administrator password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
                       leftIcon={<KeyRound className="w-4 h-4" />}
                       autoComplete="current-password"
                       disabled={isLoading}
@@ -501,43 +396,13 @@ export const LoginPage: React.FC = () => {
                     </Link>
                   </div>
                 </form>
-
-                {/* Development Quick Role Switcher */}
-                <div className="pt-3 border-t border-surface-border">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
-                    <span>Synthetic Staff Logins</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickLogin('admin_demo', 'CampusVote2026!Admin')}
-                      disabled={isLoading}
-                      className="p-2 rounded-lg border border-surface-border bg-surface-subtle hover:bg-blue-50 hover:border-blue-200 text-left transition-colors"
-                    >
-                      <div className="font-bold text-navy-950 text-[11px]">Election Admin</div>
-                      <div className="text-[10px] text-slate-500 font-mono">admin_demo</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickLogin('auditor_demo', 'CampusVote2026!Auditor')}
-                      disabled={isLoading}
-                      className="p-2 rounded-lg border border-surface-border bg-surface-subtle hover:bg-blue-50 hover:border-blue-200 text-left transition-colors"
-                    >
-                      <div className="font-bold text-navy-950 text-[11px]">System Auditor</div>
-                      <div className="text-[10px] text-slate-500 font-mono">auditor_demo</div>
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </CardContent>
 
           <CardFooter className="justify-between text-xs text-slate-500">
             <span>Session Security:</span>
-            <span className="font-mono text-emerald-700 font-medium">HTTP-Only / SameSite=Lax</span>
+            <span className="font-mono text-emerald-700 font-medium">HTTP-Only / SameSite=None (HTTPS)</span>
           </CardFooter>
         </Card>
       </div>

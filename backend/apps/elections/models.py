@@ -131,7 +131,7 @@ class Election(models.Model):
     VALID_TRANSITIONS = {
         ElectionStatus.DRAFT: {ElectionStatus.SCHEDULED, ElectionStatus.CANCELLED},
         ElectionStatus.SCHEDULED: {ElectionStatus.ACTIVE, ElectionStatus.DRAFT, ElectionStatus.CANCELLED},
-        ElectionStatus.ACTIVE: {ElectionStatus.CLOSED, ElectionStatus.CANCELLED},
+        ElectionStatus.ACTIVE: {ElectionStatus.CLOSED, ElectionStatus.CANCELLED, ElectionStatus.DRAFT},
         ElectionStatus.CLOSED: {ElectionStatus.RESULTS_PUBLISHED, ElectionStatus.ARCHIVED},
         ElectionStatus.RESULTS_PUBLISHED: {ElectionStatus.ARCHIVED},
         ElectionStatus.ARCHIVED: set(),

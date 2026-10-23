@@ -7,6 +7,7 @@ from apps.students.views import (
     StudentListCreateView,
     StudentDetailView,
     StudentDeactivateView,
+    StudentApproveView,
     StudentSummaryView,
     RosterImportPreviewView,
     RosterImportCommitView,
@@ -28,5 +29,6 @@ urlpatterns = [
     path('import/commit/', RosterImportCommitView.as_view(), name='roster-import-commit'),
     path('import/template/', RosterTemplateDownloadView.as_view(), name='roster-template-download'),
     path('<uuid:pk>/', StudentDetailView.as_view(), name='student-detail'),
+    path('<uuid:pk>/approve/', StudentApproveView.as_view(), name='student-approve'),
     path('<uuid:pk>/deactivate/', StudentDeactivateView.as_view(), name='student-deactivate'),
 ]

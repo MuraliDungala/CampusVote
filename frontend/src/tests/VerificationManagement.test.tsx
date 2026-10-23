@@ -51,8 +51,8 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
     vi.clearAllMocks();
   });
 
-  describe('LoginPage Smart ID & Tab Workflows', () => {
-    it('renders LoginPage with Student Smart ID and Staff Password tabs', () => {
+  describe('LoginPage Credentials & Tab Workflows', () => {
+    it('renders LoginPage with Student Voter and Staff & Admin tabs', () => {
       render(
         <BrowserRouter>
           <LoginPage />
@@ -60,11 +60,11 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
       );
 
       expect(screen.getByText('Campus Portal Access')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /student voter/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^student voter$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /staff & admin/i })).toBeInTheDocument();
-      expect(screen.getByLabelText(/institutional college id/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /send verification code/i })).toBeInTheDocument();
-      expect(screen.getByText(/scan student id qr code/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/institutional email or college id/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign in as student voter/i })).toBeInTheDocument();
     });
 
     it('switches to Staff Password tab when clicked', () => {
@@ -82,42 +82,32 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
       expect(screen.getByRole('button', { name: /sign in as administrator/i })).toBeInTheDocument();
     });
 
-    it('calls startCollegeIdVerification upon submitting College ID', async () => {
-      const startSpy = vi.spyOn(verificationServices, 'startCollegeIdVerification').mockResolvedValueOnce({
-        session_id: 'session-uuid-123',
-        college_id: 'CS2026001',
-        state: 'OTP_PENDING',
-        channel: 'EMAIL',
-        destination_masked: 'a***a@campusvote.edu',
-        expires_in_seconds: 300,
-        resend_cooldown_seconds: 60,
-        message: 'Verification code sent.',
-      });
-
+    it('submits student login credentials upon clicking sign in', async () => {
       render(
         <BrowserRouter>
           <LoginPage />
         </BrowserRouter>
       );
 
-      const idInput = screen.getByLabelText(/institutional college id/i);
-      fireEvent.change(idInput, { target: { value: 'CS2026001' } });
+      const idInput = screen.getByLabelText(/institutional email or college id/i);
+      const passInput = screen.getByLabelText(/password/i);
 
-      const submitBtn = screen.getByRole('button', { name: /send verification code/i });
+      fireEvent.change(idInput, { target: { value: '23341A4234@GMRIT.EDU.IN' } });
+      fireEvent.change(passInput, { target: { value: 'Secret123!' } });
+
+      const submitBtn = screen.getByRole('button', { name: /sign in as student voter/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
-        expect(startSpy).toHaveBeenCalledWith({
-          college_id: 'CS2026001',
-          channel: 'EMAIL',
+        expect(mockLogin).toHaveBeenCalledWith({
+          identifier: '23341A4234@GMRIT.EDU.IN',
+          password: 'Secret123!',
         });
       });
     });
 
-    it('displays error message if verification initialization fails', async () => {
-      vi.spyOn(verificationServices, 'startCollegeIdVerification').mockRejectedValueOnce({
-        message: 'No student registry record found for College ID.',
-      });
+    it('displays error message if login credentials fail', async () => {
+      mockLogin.mockRejectedValueOnce(new Error('Invalid credentials. Please verify your identifier and password.'));
 
       render(
         <BrowserRouter>
@@ -125,14 +115,16 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
         </BrowserRouter>
       );
 
-      const idInput = screen.getByLabelText(/institutional college id/i);
+      const idInput = screen.getByLabelText(/institutional email or college id/i);
+      const passInput = screen.getByLabelText(/password/i);
       fireEvent.change(idInput, { target: { value: 'UNKNOWN999' } });
+      fireEvent.change(passInput, { target: { value: 'WrongPass' } });
 
-      const submitBtn = screen.getByRole('button', { name: /send verification code/i });
+      const submitBtn = screen.getByRole('button', { name: /sign in as student voter/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
-        expect(screen.getByText(/no student registry record found/i)).toBeInTheDocument();
+        expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
       });
     });
   });
@@ -147,10 +139,9 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
       expires_in_seconds: 300,
       resend_cooldown_seconds: 60,
       message: 'Code sent',
-      _dev_otp: '123456',
     };
 
-    it('renders OTP challenge form with masked contact destination and dev simulator', () => {
+    it('renders OTP challenge form with masked contact destination and clean inputs', () => {
       render(
         <MemoryRouter initialEntries={[{ pathname: '/login/verify', state: mockSessionState }]}>
           <OtpVerificationPage />
@@ -160,22 +151,7 @@ describe('Phase 4: Identity Verification & Authentication Tests', () => {
       expect(screen.getByText('Two-Factor ID Verification')).toBeInTheDocument();
       expect(screen.getByText('a***a@campusvote.edu')).toBeInTheDocument();
       expect(screen.getByLabelText(/one-time verification code/i)).toBeInTheDocument();
-      expect(screen.getByText('123456')).toBeInTheDocument(); // Dev OTP simulator
       expect(screen.getByRole('button', { name: /verify & enter portal/i })).toBeInTheDocument();
-    });
-
-    it('autofills OTP when clicking Autofill on dev simulator badge', () => {
-      render(
-        <MemoryRouter initialEntries={[{ pathname: '/login/verify', state: mockSessionState }]}>
-          <OtpVerificationPage />
-        </MemoryRouter>
-      );
-
-      const autofillBtn = screen.getByRole('button', { name: /autofill/i });
-      fireEvent.click(autofillBtn);
-
-      const otpInput = screen.getByLabelText(/one-time verification code/i) as HTMLInputElement;
-      expect(otpInput.value).toBe('123456');
     });
 
     it('submits valid OTP and triggers authentication sync', async () => {

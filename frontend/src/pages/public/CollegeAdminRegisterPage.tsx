@@ -264,7 +264,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Dr. Arthur Pendelton"
                       className="pl-9 text-xs"
                       required
                     />
@@ -280,7 +279,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                           type="text"
                           value={collegeName}
                           onChange={(e) => setCollegeName(e.target.value)}
-                          placeholder="e.g. Oxford Institute of Technology"
                           className="pl-9 text-xs"
                           required
                         />
@@ -293,7 +291,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                         type="text"
                         value={institutionCode}
                         onChange={(e) => setInstitutionCode(e.target.value)}
-                        placeholder="e.g. OIT-MAIN"
                         className="text-xs uppercase font-mono"
                       />
                     </FormField>
@@ -308,7 +305,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="admin@college.edu"
                         className="pl-9 text-xs"
                         required
                       />
@@ -322,7 +318,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                         type="tel"
                         value={contactPhone}
                         onChange={(e) => setContactPhone(e.target.value)}
-                        placeholder="+1 (555) 019-2831"
                         className="pl-9 text-xs"
                       />
                     </div>
@@ -330,14 +325,13 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <FormField label="Password" required>
+                  <FormField label="Password" required helperText="Minimum 8 characters">
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <Input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="At least 8 characters"
                         className="pl-9 text-xs"
                         required
                         minLength={8}
@@ -352,7 +346,6 @@ export const CollegeAdminRegisterPage: React.FC = () => {
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Repeat password"
                         className="pl-9 text-xs"
                         required
                         minLength={8}

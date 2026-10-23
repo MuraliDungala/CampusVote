@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Routes, Route } from 'react-router-dom';
 import { PositionModal } from '../components/elections/PositionModal';
 import { NominationModal } from '../components/elections/NominationModal';
 import { NominationReviewModal } from '../components/elections/NominationReviewModal';
 import { AdminElectionListPage } from '../pages/admin/AdminElectionListPage';
 import { CreateElectionWizard } from '../pages/admin/CreateElectionWizard';
+import { AdminElectionDetailPage } from '../pages/admin/AdminElectionDetailPage';
 import { StudentNominationsPage } from '../pages/student/StudentNominationsPage';
 import { Election, ElectionPosition, Candidate } from '../types/election';
 import * as electionServices from '../services/elections';
@@ -332,6 +333,131 @@ describe('Phase 3 Create Election Wizard', () => {
     fireEvent.click(nextBtn);
 
     expect(await screen.findByText('Election title is required.')).toBeInTheDocument();
+  });
+  it('defaults to Draft (Unpublished) on Step 4 and allows toggling publication mode', async () => {
+    render(
+      <BrowserRouter>
+        <CreateElectionWizard />
+      </BrowserRouter>
+    );
+
+    // Fill step 1
+    const titleInput = screen.getByPlaceholderText(/Student Government Executive Council/i);
+    fireEvent.change(titleInput, { target: { value: 'Tech Club Election' } });
+    fireEvent.click(screen.getByRole('button', { name: /Next Step/i }));
+
+    // Step 2
+    expect(await screen.findByText(/Step 2: Voting Window Schedule/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Next Step/i }));
+
+    // Step 3
+    expect(await screen.findByText(/Step 3: Contested Positions/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Next Step/i }));
+
+    // Step 4
+    expect(await screen.findByText(/Step 4: Review & Create Election/i)).toBeInTheDocument();
+    expect(screen.getByText(/Election Public Visibility/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Draft \(Unpublished\)/i)[0]).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create Election \(Save as Draft\)/i })).toBeInTheDocument();
+
+    // Toggle switch
+    const toggleSwitch = screen.getByRole('switch');
+    fireEvent.click(toggleSwitch);
+
+    expect(screen.getByText(/Publish to Students/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create & Publish Immediately/i })).toBeInTheDocument();
+  });
+});
+
+describe('Phase 3 Election Publication Control in Admin Detail Page', () => {
+  it('renders publication toggle switch and warns if publishing with 0 candidates', async () => {
+    const draftElection: Election = {
+      ...mockElection,
+      status: 'DRAFT',
+      status_display: 'Draft',
+    };
+
+    vi.spyOn(electionServices, 'getElection').mockResolvedValue(draftElection);
+    vi.spyOn(electionServices, 'getPositions').mockResolvedValue([mockPosition]);
+    vi.spyOn(electionServices, 'getElectionCandidates').mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={['/admin/elections/elec-uuid-1']}>
+        <Routes>
+          <Route path="/admin/elections/:id" element={<AdminElectionDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Election Public Visibility/i)).toBeInTheDocument();
+    });
+
+    // Check Unpublished status badge
+    expect(screen.getByText(/Unpublished \(Draft\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Candidates Not Selected/i)).toBeInTheDocument();
+
+    // Find the toggle switch
+    const switchBtn = screen.getByRole('switch', { name: /Toggle election public visibility/i });
+    expect(switchBtn).toHaveAttribute('aria-checked', 'false');
+
+    // Click toggle switch to publish
+    fireEvent.click(switchBtn);
+
+    // Warning confirmation dialog should appear because candidates count is 0
+    await waitFor(() => {
+      expect(screen.getByText(/No Candidates Selected — Publish Anyway\?/i)).toBeInTheDocument();
+      expect(screen.getByText(/Warning: There are currently 0 candidates registered/i)).toBeInTheDocument();
+    });
+  });
+
+  it('allows unpublishing a scheduled election back to Draft mode', async () => {
+    const scheduledElection: Election = {
+      ...mockElection,
+      status: 'SCHEDULED',
+      status_display: 'Scheduled',
+    };
+
+    vi.spyOn(electionServices, 'getElection').mockResolvedValue(scheduledElection);
+    vi.spyOn(electionServices, 'getPositions').mockResolvedValue([mockPosition]);
+    vi.spyOn(electionServices, 'getElectionCandidates').mockResolvedValue([mockCandidate]);
+    const unpublishSpy = vi.spyOn(electionServices, 'unpublishElection').mockResolvedValue({
+      ...scheduledElection,
+      status: 'DRAFT',
+      status_display: 'Draft',
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/admin/elections/elec-uuid-1']}>
+        <Routes>
+          <Route path="/admin/elections/:id" element={<AdminElectionDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Election Public Visibility/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Published & Live to Students/i)).toBeInTheDocument();
+
+    const switchBtn = screen.getByRole('switch', { name: /Toggle election public visibility/i });
+    expect(switchBtn).toHaveAttribute('aria-checked', 'true');
+
+    // Click toggle to unpublish
+    fireEvent.click(switchBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Unpublish Election and Return to Draft\?/i)).toBeInTheDocument();
+    });
+
+    // Confirm unpublish
+    const confirmBtn = screen.getByRole('button', { name: /^Confirm$/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(unpublishSpy).toHaveBeenCalled();
+    });
   });
 });
 
